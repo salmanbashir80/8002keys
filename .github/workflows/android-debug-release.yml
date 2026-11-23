@@ -1,0 +1,98 @@
+name: Build & Publish Debug APK Prerelease
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-debug-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    if: github.repository == 'salmanbashir80/8002keys'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install Android SDK components
+        run: sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
+
+      - name: Run static identity and trust gates
+        run: |
+          set -euo pipefail
+          bash scripts/check-fork-identity.sh
+          python3 scripts/check-trust-capabilities.py
+          python3 scripts/check-locale-coverage.py --check
+          bash scripts/check-fastlane-metadata.sh
+          python3 scripts/check-layout-json.py
+
+      - name: Build verified debug APK
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          bash gradlew :app:verifyNoInternetPermission :lib:kotlin:test :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Verify APK alignment & signature and prepare release assets
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/8002Keys-v1.9.70-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk dist/8002Keys.apk
+          python3 scripts/check-apk-16kb-alignment.py dist/8002Keys-v1.9.70-debug.apk
+          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --print-certs dist/8002Keys-v1.9.70-debug.apk
+          (
+            cd dist
+            sha256sum 8002Keys-v1.9.70-debug.apk 8002Keys.apk > SHA256SUMS.txt
+          )
+          APK_SHA=$(sha256sum dist/8002Keys-v1.9.70-debug.apk | awk '{print $1}')
+          APK_SIZE=$(stat -c%s dist/8002Keys-v1.9.70-debug.apk)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          cat > dist/build-info.json <<EOF
+          {
+            "packageName": "com.salmanbashir.keys8002",
+            "appName": "8002Keys",
+            "versionName": "1.9.70-debug+${SHORT_SHA}",
+            "versionCode": 2119,
+            "commit": "${GITHUB_SHA}",
+            "apkSha256": "${APK_SHA}",
+            "apkSizeBytes": ${APK_SIZE},
+            "channel": "debug-prerelease"
+          }
+          EOF
+          echo "apk_sha=$APK_SHA" >> "$GITHUB_ENV"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_ENV"
+
+      - name: Publish debug prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release delete v1.9.70-debug.1 --yes --cleanup-tag 2>/dev/null || true
+          gh release create v1.9.70-debug.1 \
+            dist/8002Keys-v1.9.70-debug.apk \
+            dist/8002Keys.apk \
+            dist/SHA256SUMS.txt \
+            dist/build-info.json \
+            --prerelease \
+            --target "${GITHUB_SHA}" \
+            --title "8002Keys v1.9.70-debug+${short_sha} (Debug Prerelease)" \
+            --notes "Debug-signed APK (`com.salmanbashir.keys8002`) built from `${short_sha}`. SHA-256: `${apk_sha}`. Includes rebranded 8002Keys identity and offline Roman Urdu + English support. Not yet tested on a physical Android device."
