@@ -21,10 +21,10 @@
         only be exercised from a release-signed build.
     -->
     <permission
-        android:name="io.github.sysadmindoc.swiftfloris.permission.REGISTER_ADDON"
+        android:name="com.salmanbashir.keys8002.permission.REGISTER_ADDON"
         tools:node="remove"/>
     <permission
-        android:name="io.github.sysadmindoc.swiftfloris.permission.BIND_MCP"
+        android:name="com.salmanbashir.keys8002.permission.BIND_MCP"
         tools:node="remove"/>
 
     <application>

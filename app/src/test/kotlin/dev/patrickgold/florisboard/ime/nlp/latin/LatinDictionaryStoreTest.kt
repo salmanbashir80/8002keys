@@ -27,11 +27,19 @@ class LatinDictionaryStoreTest : FunSpec({
         LatinDictionaryStore.normalizeLanguageCode("pt-BR") shouldBe "pt"
         LatinDictionaryStore.normalizeLanguageCode("de_DE") shouldBe "de"
         LatinDictionaryStore.normalizeLanguageCode("") shouldBe "en"
+        LatinDictionaryStore.normalizeLanguageCode("ur-PK-roman") shouldBe "ur_roman"
+        LatinDictionaryStore.normalizeLanguageCode("ur-Latn-PK") shouldBe "ur_roman"
+        LatinDictionaryStore.normalizeLanguageCode("ur-PK") shouldBe "ur"
 
         LatinDictionaryStore.assetPathsForLanguage("pt-BR") shouldBe listOf(
             "ime/dict/pt.json",
             "ime/dict/pt.fldic",
         )
+        LatinDictionaryStore.assetPathsForLanguage("ur-PK-roman") shouldBe listOf(
+            "ime/dict/ur_roman.json",
+            "ime/dict/ur_roman.fldic",
+        )
+        LatinDictionaryStore.zipfAssetPath("ur-PK-roman") shouldBe "freq/ur_roman.tsv"
         LatinDictionaryStore.assetPathsForLanguage("en-US") shouldBe listOf(
             "ime/dict/en.json",
             "ime/dict/en.fldic",

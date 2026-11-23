@@ -32,7 +32,7 @@ package dev.patrickgold.florisboard
  * accepted on data-migration paths (backup restore).
  */
 object AppPackageContract {
-    const val BASE_APPLICATION_ID: String = "io.github.sysadmindoc.swiftfloris"
+    const val BASE_APPLICATION_ID: String = "com.salmanbashir.keys8002"
 
     /** Pre-migration application ID (shared with upstream FlorisBoard).
      *  Accepted for backup restore so existing users can carry their data

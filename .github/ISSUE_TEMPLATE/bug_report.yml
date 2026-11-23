@@ -1,12 +1,12 @@
 name: 🐛 Bug Report
-description: Create a report to help SwiftFloris improve
+description: Create a report to help 8002Keys improve
 labels:
   - "bug"
 body:
   - type: markdown
     attributes:
       value: |
-        Thank you for your help in making SwiftFloris better!
+        Thank you for your help in making 8002Keys better!
         Guide to a good bug-report:
         • Please search existing bug/crash reports reports to avoid creating duplicates.
         • Give your bug report a good name (no generics like "Error" or "Crash"), so others can easily identify the topic of your issue.
@@ -34,7 +34,7 @@ body:
   - type: input
     id: florisversion
     attributes:
-      label: SwiftFloris Version
+      label: 8002Keys Version
       placeholder: e.g. 1.9.34
     validations:
       required: true
@@ -68,9 +68,9 @@ body:
     attributes:
       label: "Checklist"
       options:
-        - label: "I made sure that there are *no existing issues* - [open](https://github.com/SysAdminDoc/SwiftFloris/issues) or [closed](https://github.com/SysAdminDoc/SwiftFloris/issues?q=is%3Aissue+is%3Aclosed) - which I could contribute my information to."
+        - label: "I made sure that there are *no existing issues* - [open](https://github.com/salmanbashir80/8002keys/issues) or [closed](https://github.com/salmanbashir80/8002keys/issues?q=is%3Aissue+is%3Aclosed) - which I could contribute my information to."
           required: true
-        - label: "I have read and understood the [SwiftFloris contribution notes](https://github.com/SysAdminDoc/SwiftFloris#contributing)."
+        - label: "I have read and understood the [8002Keys contribution notes](https://github.com/salmanbashir80/8002keys#contributing)."
           required: true
         - label: "I have checked that this report does not require adding network permission, telemetry, account binding, GPL-linked base-app code, or closed-source blobs."
           required: true

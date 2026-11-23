@@ -31,7 +31,7 @@ class VoiceInputEmptyStateCopyTest : FunSpec({
         summary shouldContain "FUTO Voice Input"
         summary shouldContain "WhisperInput"
         summary shouldContain "Whisper"
-        summary shouldContain "SwiftFloris itself does not record audio"
+        summary shouldContain "8002Keys itself does not record audio"
         stringsXml.stringValue("voice_input_setup__install_fdroid") shouldBe "Install from F-Droid"
         stringsXml.stringValue("voice_input_setup__install_whisper") shouldBe "Install Whisper from F-Droid"
     }

@@ -106,6 +106,7 @@ object Restore {
     // the application-ID migration without a vendor warning.
     val ACCEPTED_PACKAGE_PREFIXES = listOf(
         AppPackageContract.BASE_APPLICATION_ID,
+        "io.github.sysadmindoc.swiftfloris",
         AppPackageContract.LEGACY_APPLICATION_ID,
     )
     const val BACKUP_ARCHIVE_FILE_NAME = "backup.archive"

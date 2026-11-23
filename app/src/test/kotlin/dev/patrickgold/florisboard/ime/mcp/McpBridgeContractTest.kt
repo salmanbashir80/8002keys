@@ -23,13 +23,13 @@ import io.kotest.matchers.shouldBe
 class McpBridgeContractTest : FunSpec({
     test("constants follow the dev.patrickgold.florisboard.* namespace") {
         McpBridgeContract.ACTION_BIND_MCP_DAEMON shouldBe
-            "io.github.sysadmindoc.swiftfloris.action.BIND_MCP_DAEMON"
+            "com.salmanbashir.keys8002.action.BIND_MCP_DAEMON"
         McpBridgeContract.PERMISSION_BIND_MCP shouldBe
-            "io.github.sysadmindoc.swiftfloris.permission.BIND_MCP"
+            "com.salmanbashir.keys8002.permission.BIND_MCP"
         McpBridgeContract.METADATA_TOOL_CATALOG shouldBe
-            "io.github.sysadmindoc.swiftfloris.mcp.tool_catalog"
+            "com.salmanbashir.keys8002.mcp.tool_catalog"
         McpBridgeContract.METADATA_PROTOCOL_VERSION shouldBe
-            "io.github.sysadmindoc.swiftfloris.mcp.protocol_version"
+            "com.salmanbashir.keys8002.mcp.protocol_version"
     }
 
     test("payload cap is 4 MB") {

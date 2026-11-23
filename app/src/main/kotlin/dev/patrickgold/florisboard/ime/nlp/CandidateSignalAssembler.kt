@@ -146,7 +146,9 @@ internal object CandidateSignalAssembler {
         val languageIdScores = LatinScriptLanguageIdentifier.score(
             currentWord = currentWord,
             previousWords = languageContextWords,
-            locales = locales.map { it.language },
+            locales = locales.map {
+                dev.patrickgold.florisboard.ime.nlp.latin.LatinDictionaryStore.normalizeLanguageCode(it.languageTag())
+            },
         )
         val candidateKeys = candidates.asSequence()
             .filterIsInstance<WordSuggestionCandidate>()
@@ -181,11 +183,13 @@ internal object CandidateSignalAssembler {
                 val candidateText = candidate.text.toString()
                 val key = candidateSignalKeyOf(candidateText) ?: continue
                 val localeEvidence = locales.map { locale ->
+                    val languageKey = dev.patrickgold.florisboard.ime.nlp.latin.LatinDictionaryStore
+                        .normalizeLanguageCode(locale.languageTag())
                     TokenLocaleEvidence(
                         typedFrequency = typedWordKey?.let { word -> sources.frequency(locale, word) } ?: 0.0,
                         candidateFrequency = sources.frequency(locale, key),
                         contextFrequency = contextLanguageScores[locale] ?: 0.0,
-                        languageIdConfidence = languageIdScores[locale.language] ?: 0.0,
+                        languageIdConfidence = languageIdScores[languageKey] ?: 0.0,
                     )
                 }
                 val languageSignal = MultilingualTokenScorer.score(

@@ -20,7 +20,7 @@ package dev.patrickgold.florisboard.benchmark
 // CLASS names below intentionally keep the dev.patrickgold.florisboard
 // source-package prefix — Kotlin packages did not move in the app-ID
 // migration, only the installed identity did.
-internal const val TargetPackageName = "io.github.sysadmindoc.swiftfloris.bench"
+internal const val TargetPackageName = "com.salmanbashir.keys8002.bench"
 internal const val TargetBenchmarkInputActivity =
     "dev.patrickgold.florisboard.benchmark.BenchmarkInputActivity"
 internal const val TargetBenchmarkInputComponent =

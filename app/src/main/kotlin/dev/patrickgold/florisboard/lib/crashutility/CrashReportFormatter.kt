@@ -78,7 +78,7 @@ internal data class CrashReportEnvironment(
 }
 
 internal object CrashReportFormatter {
-    const val PRODUCT_NAME = "SwiftFloris"
+    const val PRODUCT_NAME = "8002Keys"
     const val REDACTION_REMINDER =
         "Before sharing, remove typed text, clipboard content, personal dictionary content, " +
             "private APK paths, and unrelated device logs."

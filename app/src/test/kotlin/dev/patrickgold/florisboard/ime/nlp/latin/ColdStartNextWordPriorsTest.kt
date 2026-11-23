@@ -17,6 +17,7 @@
 package dev.patrickgold.florisboard.ime.nlp.latin
 
 import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.shouldBe
 
 class ColdStartNextWordPriorsTest : FunSpec({
@@ -126,6 +127,27 @@ class ColdStartNextWordPriorsTest : FunSpec({
             textBeforeCursor = "Bom dia ",
             languageCode = "pt-BR",
             candidateWord = "como",
+        ) shouldBe 0.44
+    }
+
+    test("returns Roman Urdu sentence starters and continuations for ur-PK-roman") {
+        val starters = ColdStartNextWordPriors.suggest(
+            textBeforeCursor = "",
+            languageCode = "ur-PK-roman",
+            maxCandidateCount = 4,
+        )
+        starters.map { it.word } shouldContainAll listOf("kya", "aap", "mein")
+
+        val phraseMatches = ColdStartNextWordPriors.suggest(
+            textBeforeCursor = "Kya haal ",
+            languageCode = "ur-PK-roman",
+            maxCandidateCount = 3,
+        )
+        phraseMatches.map { it.word } shouldContainAll listOf("hai", "hain")
+        ColdStartNextWordPriors.score(
+            textBeforeCursor = "Kya haal ",
+            languageCode = "ur-PK-roman",
+            candidateWord = "hai",
         ) shouldBe 0.44
     }
 

@@ -5,10 +5,10 @@
     <!-- Debug-key build: leave the signature permissions to the release so
          both install side by side (see the debug overlay). -->
     <permission
-        android:name="io.github.sysadmindoc.swiftfloris.permission.REGISTER_ADDON"
+        android:name="com.salmanbashir.keys8002.permission.REGISTER_ADDON"
         tools:node="remove"/>
     <permission
-        android:name="io.github.sysadmindoc.swiftfloris.permission.BIND_MCP"
+        android:name="com.salmanbashir.keys8002.permission.BIND_MCP"
         tools:node="remove"/>
 
     <application>

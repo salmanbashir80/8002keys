@@ -32,7 +32,7 @@
          can request a self-registration callback. Addons are also subject to
          the no-INTERNET invariant verified by AddonEnumerator at enrolment. -->
     <permission
-        android:name="io.github.sysadmindoc.swiftfloris.permission.REGISTER_ADDON"
+        android:name="com.salmanbashir.keys8002.permission.REGISTER_ADDON"
         android:label="@string/app_name"
         android:protectionLevel="signature"/>
 
@@ -42,10 +42,10 @@
          correctly gates its service with it; protectionLevel="signature"
          keeps random apps from binding daemons. -->
     <permission
-        android:name="io.github.sysadmindoc.swiftfloris.permission.BIND_MCP"
+        android:name="com.salmanbashir.keys8002.permission.BIND_MCP"
         android:label="@string/app_name"
         android:protectionLevel="signature"/>
-    <uses-permission android:name="io.github.sysadmindoc.swiftfloris.permission.BIND_MCP"/>
+    <uses-permission android:name="com.salmanbashir.keys8002.permission.BIND_MCP"/>
 
     <!-- Android 11+ only: Define that FlorisBoard requests to see all apps that
           ship with an IME or Spell Check service. This is used to guide the user
@@ -66,43 +66,43 @@
              AddonEnumerator (Next-10.2) see installed addon packages on
              Android 11+, where queries are required by default. -->
         <intent>
-            <action android:name="io.github.sysadmindoc.swiftfloris.action.REGISTER_ADDON"/>
+            <action android:name="com.salmanbashir.keys8002.action.REGISTER_ADDON"/>
         </intent>
         <intent>
-            <action android:name="io.github.sysadmindoc.swiftfloris.action.REGISTER_LANGUAGE_PACK"/>
+            <action android:name="com.salmanbashir.keys8002.action.REGISTER_LANGUAGE_PACK"/>
         </intent>
         <intent>
-            <action android:name="io.github.sysadmindoc.swiftfloris.action.REGISTER_THEME_PACK"/>
+            <action android:name="com.salmanbashir.keys8002.action.REGISTER_THEME_PACK"/>
         </intent>
         <intent>
-            <action android:name="io.github.sysadmindoc.swiftfloris.action.REGISTER_DICTIONARY_PACK"/>
+            <action android:name="com.salmanbashir.keys8002.action.REGISTER_DICTIONARY_PACK"/>
         </intent>
         <intent>
-            <action android:name="io.github.sysadmindoc.swiftfloris.action.REGISTER_LAYOUT_PACK"/>
+            <action android:name="com.salmanbashir.keys8002.action.REGISTER_LAYOUT_PACK"/>
         </intent>
         <intent>
-            <action android:name="io.github.sysadmindoc.swiftfloris.action.REGISTER_POPUP_MAPPING_PACK"/>
+            <action android:name="com.salmanbashir.keys8002.action.REGISTER_POPUP_MAPPING_PACK"/>
         </intent>
         <intent>
-            <action android:name="io.github.sysadmindoc.swiftfloris.action.REGISTER_SMART_COMPOSE_RUNTIME"/>
+            <action android:name="com.salmanbashir.keys8002.action.REGISTER_SMART_COMPOSE_RUNTIME"/>
         </intent>
         <intent>
-            <action android:name="io.github.sysadmindoc.swiftfloris.action.REGISTER_TRANSLATION_RUNTIME"/>
+            <action android:name="com.salmanbashir.keys8002.action.REGISTER_TRANSLATION_RUNTIME"/>
         </intent>
         <intent>
-            <action android:name="io.github.sysadmindoc.swiftfloris.action.REGISTER_CJK_RUNTIME"/>
+            <action android:name="com.salmanbashir.keys8002.action.REGISTER_CJK_RUNTIME"/>
         </intent>
         <intent>
-            <action android:name="io.github.sysadmindoc.swiftfloris.action.REGISTER_HANDWRITING_RUNTIME"/>
+            <action android:name="com.salmanbashir.keys8002.action.REGISTER_HANDWRITING_RUNTIME"/>
         </intent>
         <intent>
-            <action android:name="io.github.sysadmindoc.swiftfloris.action.REGISTER_VOICE_RUNTIME"/>
+            <action android:name="com.salmanbashir.keys8002.action.REGISTER_VOICE_RUNTIME"/>
         </intent>
         <!-- ROADMAP §10.5 L7.5 — MCP daemon visibility. Without this entry,
              McpAndroidDiscoverer's queryIntentServices() silently returns no
              candidates on Android 11+ package-visibility filtering. -->
         <intent>
-            <action android:name="io.github.sysadmindoc.swiftfloris.action.BIND_MCP_DAEMON"/>
+            <action android:name="com.salmanbashir.keys8002.action.BIND_MCP_DAEMON"/>
         </intent>
     </queries>
 

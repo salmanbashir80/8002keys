@@ -28,13 +28,20 @@ internal object BilingualSubtypePresets {
 
     fun canonicalFrom(subtypePresets: List<SubtypePreset>): List<SubtypePreset> {
         val primaryPreset = subtypePresets.findBestPresetFor(PrimaryLocale) ?: return emptyList()
-        return SecondaryLocales.map { secondaryLocale ->
+        val standardPairs = SecondaryLocales.map { secondaryLocale ->
             primaryPreset.copy(
                 secondaryLocales = listOf(
                     subtypePresets.findBestPresetFor(secondaryLocale)?.locale ?: secondaryLocale,
                 ),
             )
         }
+        val romanUrduPreset = subtypePresets.firstOrNull {
+            it.locale.language == "ur" && it.locale.variant.equals("roman", ignoreCase = true)
+        } ?: return standardPairs
+        return standardPairs + listOf(
+            primaryPreset.copy(secondaryLocales = listOf(romanUrduPreset.locale)),
+            romanUrduPreset.copy(secondaryLocales = listOf(primaryPreset.locale)),
+        )
     }
 
     private fun List<SubtypePreset>.findBestPresetFor(locale: FlorisLocale): SubtypePreset? {

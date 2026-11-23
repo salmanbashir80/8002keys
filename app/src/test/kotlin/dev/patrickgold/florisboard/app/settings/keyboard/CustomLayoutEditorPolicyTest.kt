@@ -120,13 +120,13 @@ class CustomLayoutEditorPolicyTest : FunSpec({
         val extension = CustomLayoutEditorPolicy.buildKeyboardExtension(
             draft = draft,
             extensionTitle = "Custom layout: Custom",
-            extensionDescription = "Local keyboard layout created with SwiftFloris.",
-            localMaintainer = "SwiftFloris user",
+            extensionDescription = "Local keyboard layout created with 8002Keys.",
+            localMaintainer = "8002Keys user",
         )
         extension.meta.id shouldBe "local.swiftfloris.keyboardlayout.custom"
         extension.meta.title shouldBe "Custom layout: Custom"
-        extension.meta.description shouldBe "Local keyboard layout created with SwiftFloris."
-        extension.meta.maintainers.single().name shouldBe "SwiftFloris user"
+        extension.meta.description shouldBe "Local keyboard layout created with 8002Keys."
+        extension.meta.maintainers.single().name shouldBe "8002Keys user"
         val layout = extension.layouts.getValue(LayoutTypeId.CHARACTERS).single()
         layout.id shouldBe "custom"
         layout.label shouldBe "Custom"

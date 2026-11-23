@@ -339,7 +339,7 @@ fun PrivacyPostureScreen() = FlorisScreen {
                         addonPinCount = countNonBlankLines(addonSigningPins),
                         mcpPinCount = countNonBlankLines(mcpSigningPins),
                     )
-                    val clip = android.content.ClipData.newPlainText("SwiftFloris privacy proof", proof)
+                    val clip = android.content.ClipData.newPlainText("8002Keys privacy proof", proof)
                     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                     cm.setPrimaryClip(clip)
                     Toast.makeText(context, proofCopiedToast, Toast.LENGTH_SHORT).show()
@@ -546,8 +546,8 @@ private fun buildPrivacyProofBundle(
         appendLine("  \"internetPermission\": ${hasInternet},")
         appendLine("  \"addonPinCount\": $addonPinCount,")
         appendLine("  \"mcpPinCount\": $mcpPinCount,")
-        appendLine("  \"sourceUrl\": \"https://github.com/SysAdminDoc/SwiftFloris\",")
-        appendLine("  \"reproducibleBuildUrl\": \"https://github.com/SysAdminDoc/SwiftFloris/blob/master/docs/REPRODUCIBLE_BUILDS.md\"")
+        appendLine("  \"sourceUrl\": \"https://github.com/salmanbashir80/8002keys\",")
+        appendLine("  \"reproducibleBuildUrl\": \"https://github.com/salmanbashir80/8002keys/blob/master/docs/REPRODUCIBLE_BUILDS.md\"")
         appendLine("}")
     }
 }

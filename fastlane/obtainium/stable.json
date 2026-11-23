@@ -1,7 +1,7 @@
 {
-  "id": "io.github.sysadmindoc.swiftfloris",
-  "url": "https://github.com/SysAdminDoc/SwiftFloris",
-  "author": "SysAdminDoc",
-  "name": "SwiftFloris",
-  "additionalSettings": "{\"includePrereleases\":false,\"fallbackToOlderReleases\":true,\"trackOnly\":false,\"versionDetection\":true,\"apkFilterRegEx\":\"SwiftFloris-.*-release\\\\.apk\"}"
+  "id": "com.salmanbashir.keys8002",
+  "url": "https://github.com/salmanbashir80/8002keys",
+  "author": "salmanbashir80",
+  "name": "8002Keys",
+  "additionalSettings": "{\"includePrereleases\":false,\"fallbackToOlderReleases\":true,\"trackOnly\":false,\"versionDetection\":true,\"apkFilterRegEx\":\"8002Keys-.*-release\\\\.apk\"}"
 }

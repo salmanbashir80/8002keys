@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.github.sysadmindoc.swiftfloris.addons.dictionarypack.sample;
+package com.salmanbashir.keys8002.addons.dictionarypack.sample;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;

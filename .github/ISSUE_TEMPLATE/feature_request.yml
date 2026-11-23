@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for your help in making SwiftFloris better!
+        Thank you for your help in making 8002Keys better!
 
         Guide to a good feature-request:
         • Please search existing proposals to avoid creating duplicates.
@@ -25,11 +25,11 @@ body:
     attributes:
       label: "Checklist"
       options:
-        - label: "I made sure that there are *no existing issues* - [open](https://github.com/SysAdminDoc/SwiftFloris/issues) or [closed](https://github.com/SysAdminDoc/SwiftFloris/issues?q=is%3Aissue+is%3Aclosed) - which I could contribute my information to."
+        - label: "I made sure that there are *no existing issues* - [open](https://github.com/salmanbashir80/8002keys/issues) or [closed](https://github.com/salmanbashir80/8002keys/issues?q=is%3Aissue+is%3Aclosed) - which I could contribute my information to."
           required: true
-        - label: "I have read and understood the [SwiftFloris contribution notes](https://github.com/SysAdminDoc/SwiftFloris#contributing)."
+        - label: "I have read and understood the [8002Keys contribution notes](https://github.com/salmanbashir80/8002keys#contributing)."
           required: true
-        - label: "I understand SwiftFloris will not add network permission, telemetry, account binding, GPL-linked base-app code, or closed-source blobs for this feature."
+        - label: "I understand 8002Keys will not add network permission, telemetry, account binding, GPL-linked base-app code, or closed-source blobs for this feature."
           required: true
         - label: "I have taken the time to fill in all the required details. I understand that the feature request will be dismissed otherwise."
           required: true

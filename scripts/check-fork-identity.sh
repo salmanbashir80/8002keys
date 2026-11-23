@@ -6,7 +6,7 @@
 # every user-visible surface.
 #
 # Checks:
-#   1. applicationId is io.github.sysadmindoc.swiftfloris
+#   1. applicationId is com.salmanbashir.keys8002
 #   2. app_name string resource is "SwiftFloris"
 #   3. Fastlane title.txt does not contain "FlorisBoard"
 #   4. Fastlane short_description.txt exists and is non-empty
@@ -47,22 +47,22 @@ ok() {
 
 # --- 1. applicationId ---
 app_id="$(grep -oP "applicationId\s*=\s*\"\K[^\"]*" app/build.gradle.kts | head -1)"
-if [ "$app_id" = "io.github.sysadmindoc.swiftfloris" ]; then
+if [ "$app_id" = "com.salmanbashir.keys8002" ]; then
   ok "applicationId = $app_id"
 elif [ -z "$app_id" ]; then
   fail "could not parse applicationId from app/build.gradle.kts"
 else
-  fail "applicationId is '$app_id' — expected 'io.github.sysadmindoc.swiftfloris'"
+  fail "applicationId is '$app_id' — expected 'com.salmanbashir.keys8002'"
 fi
 
 # --- 2. app_name string resource ---
 app_name="$(grep -oP '<string name="app_name">\K[^<]*' app/src/main/res/values/strings.xml | head -1)"
-if [ "$app_name" = "SwiftFloris" ]; then
+if [ "$app_name" = "8002Keys" ]; then
   ok "app_name = $app_name"
 elif [ -z "$app_name" ]; then
   fail "could not parse app_name from strings.xml"
 else
-  fail "app_name is '$app_name' — expected 'SwiftFloris'"
+  fail "app_name is '$app_name' — expected '8002Keys'"
 fi
 
 # --- 3. Fastlane English title ---
@@ -108,10 +108,10 @@ fi
 
 # --- 7. rootProject.name (hard check for F-Droid reviewer clarity) ---
 root_name="$(grep -oP 'rootProject\.name\s*=\s*"\K[^"]*' settings.gradle.kts | head -1)" || true
-if [ -n "$root_name" ] && [ "$root_name" = "SwiftFloris" ]; then
+if [ -n "$root_name" ] && [ "$root_name" = "Keys8002" ]; then
   ok "rootProject.name = $root_name"
 elif [ -n "$root_name" ]; then
-  fail "rootProject.name = '$root_name' — expected 'SwiftFloris' (F-Droid reviewers and reproducibility logs reference this)"
+  fail "rootProject.name = '$root_name' — expected 'Keys8002' (F-Droid reviewers and reproducibility logs reference this)"
 fi
 
 # --- 8. Localized app_name overrides must not say "FlorisBoard" ---
@@ -131,7 +131,7 @@ for obtainium_manifest in fastlane/obtainium/stable.json fastlane/obtainium/prev
     if grep -Eqi 'dev\.patrickgold\.florisboard|github\.com/florisboard/florisboard|"author"[[:space:]]*:[[:space:]]*"florisboard"|FlorisBoard (Stable|Preview)' "$obtainium_manifest"; then
       fail "$obtainium_manifest contains upstream FlorisBoard Obtainium identity"
     else
-      ok "$obtainium_manifest uses SwiftFloris identity"
+      ok "$obtainium_manifest uses 8002Keys identity"
     fi
   fi
 done

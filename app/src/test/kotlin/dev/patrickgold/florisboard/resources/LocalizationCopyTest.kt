@@ -37,7 +37,7 @@ class LocalizationCopyTest : FunSpec({
     }
 
     test("English source labels name the source instead of generic storage") {
-        rootStrings["pref__theme__source_assets"] shouldBe "Bundled SwiftFloris assets"
+        rootStrings["pref__theme__source_assets"] shouldBe "Bundled 8002Keys assets"
         rootStrings["pref__theme__source_internal"] shouldBe "App-private storage"
         rootStrings["pref__theme__source_external"] shouldBe "External document provider"
         rootStrings["settings__udm__import_summary__format__csv"] shouldBe "CSV dictionary file"

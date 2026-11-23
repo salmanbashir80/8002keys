@@ -1,23 +1,23 @@
 <resources>
     <item name="floris_app_name" translatable="false" type="string">@string/app_name</item>
 
-    <string name="florisboard__repo_url" translatable="false">https://github.com/SysAdminDoc/SwiftFloris</string>
-    <string name="florisboard__issue_tracker_url" translatable="false">https://github.com/SysAdminDoc/SwiftFloris/issues</string>
-    <string name="florisboard__crash_report_url" translatable="false">https://github.com/SysAdminDoc/SwiftFloris/issues/new?template=crash_report.yml</string>
-    <string name="florisboard__bug_report_url" translatable="false">https://github.com/SysAdminDoc/SwiftFloris/issues/new?template=bug_report.yml</string>
-    <string name="florisboard__privacy_policy_url" translatable="false">https://github.com/SysAdminDoc/SwiftFloris</string>
-    <string name="florisboard__changelog_url" translatable="false">https://github.com/SysAdminDoc/SwiftFloris/releases/v{version}</string>
-    <string name="florisboard__privacy_and_ai_url" translatable="false">https://github.com/SysAdminDoc/SwiftFloris/blob/master/docs/PRIVACY_AND_AI.md</string>
-    <string name="florisboard__threat_model_url" translatable="false">https://github.com/SysAdminDoc/SwiftFloris/blob/master/docs/THREAT_MODEL.md</string>
-    <string name="florisboard__project_context_url" translatable="false">https://github.com/SysAdminDoc/SwiftFloris/blob/master/PROJECT_CONTEXT.md</string>
-    <string name="florisboard__commit_by_hash_url" translatable="false">https://github.com/SysAdminDoc/SwiftFloris/commit/{hash}</string>
-    <string name="florisboard__spell_checker_wiki_url" translatable="false">https://github.com/SysAdminDoc/SwiftFloris/wiki</string>
-    <string name="florisboard__theme_editor_wiki_url" translatable="false">https://github.com/SysAdminDoc/SwiftFloris/wiki</string>
-    <string name="florisboard__internal_key_codes_url" translatable="false">https://github.com/SysAdminDoc/SwiftFloris/blob/main/app/src/main/kotlin/dev/patrickgold/florisboard/ime/text/key/KeyCode.kt</string>
+    <string name="florisboard__repo_url" translatable="false">https://github.com/salmanbashir80/8002keys</string>
+    <string name="florisboard__issue_tracker_url" translatable="false">https://github.com/salmanbashir80/8002keys/issues</string>
+    <string name="florisboard__crash_report_url" translatable="false">https://github.com/salmanbashir80/8002keys/issues/new?template=crash_report.yml</string>
+    <string name="florisboard__bug_report_url" translatable="false">https://github.com/salmanbashir80/8002keys/issues/new?template=bug_report.yml</string>
+    <string name="florisboard__privacy_policy_url" translatable="false">https://github.com/salmanbashir80/8002keys</string>
+    <string name="florisboard__changelog_url" translatable="false">https://github.com/salmanbashir80/8002keys/releases/v{version}</string>
+    <string name="florisboard__privacy_and_ai_url" translatable="false">https://github.com/salmanbashir80/8002keys/blob/master/docs/PRIVACY_AND_AI.md</string>
+    <string name="florisboard__threat_model_url" translatable="false">https://github.com/salmanbashir80/8002keys/blob/master/docs/THREAT_MODEL.md</string>
+    <string name="florisboard__project_context_url" translatable="false">https://github.com/salmanbashir80/8002keys/blob/master/PROJECT_CONTEXT.md</string>
+    <string name="florisboard__commit_by_hash_url" translatable="false">https://github.com/salmanbashir80/8002keys/commit/{hash}</string>
+    <string name="florisboard__spell_checker_wiki_url" translatable="false">https://github.com/salmanbashir80/8002keys/wiki</string>
+    <string name="florisboard__theme_editor_wiki_url" translatable="false">https://github.com/salmanbashir80/8002keys/wiki</string>
+    <string name="florisboard__internal_key_codes_url" translatable="false">https://github.com/salmanbashir80/8002keys/blob/main/app/src/main/kotlin/dev/patrickgold/florisboard/ime/text/key/KeyCode.kt</string>
     <string name="florisboard__character_key_codes_url" translatable="false">https://unicode-table.com/en</string>
-    <string name="florisboard__reproducible_builds_url" translatable="false">https://github.com/SysAdminDoc/SwiftFloris/blob/master/docs/REPRODUCIBLE_BUILDS.md</string>
-    <string name="florisboard__security_url" translatable="false">https://github.com/SysAdminDoc/SwiftFloris/blob/master/docs/SECURITY.md</string>
-    <string name="florisboard__migration_guide_url" translatable="false">https://github.com/SysAdminDoc/SwiftFloris/blob/master/docs/MIGRATE_FROM_SWIFTKEY.md</string>
+    <string name="florisboard__reproducible_builds_url" translatable="false">https://github.com/salmanbashir80/8002keys/blob/master/docs/REPRODUCIBLE_BUILDS.md</string>
+    <string name="florisboard__security_url" translatable="false">https://github.com/salmanbashir80/8002keys/blob/master/docs/SECURITY.md</string>
+    <string name="florisboard__migration_guide_url" translatable="false">https://github.com/salmanbashir80/8002keys/blob/master/docs/MIGRATE_FROM_SWIFTKEY.md</string>
 
     <string name="general__system_string_placeholder" translatable="false">%s</string>
     <string name="general__empty_string" translatable="false"/>

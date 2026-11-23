@@ -91,7 +91,7 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
         allowPossiblyOffensive: Boolean,
         isPrivateSession: Boolean,
     ): SpellingResult {
-        val languageCode = LatinDictionaryStore.normalizeLanguageCode(subtype.primaryLocale.language)
+        val languageCode = LatinDictionaryStore.normalizeLanguageCode(subtype.primaryLocale.languageTag())
         val normalizedWord = LatinDictionarySuggester.normalizeWord(word) ?: return SpellingResult.unspecified()
         val dictionary = dictionary(subtype)
         LatinDictionarySuggester.englishContractionCorrection(
@@ -195,7 +195,7 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
         return if (multilingual) {
             suggestMultilingual(currentWord, content, locales, maxCandidateCount, isPrivateSession)
         } else {
-            val languageCode = LatinDictionaryStore.normalizeLanguageCode(subtype.primaryLocale.language)
+            val languageCode = LatinDictionaryStore.normalizeLanguageCode(subtype.primaryLocale.languageTag())
             // Lazy hydrate so a process restart picks up the user's vocabulary
             // on the first suggest after typing resumes. Idempotent + async.
             dev.patrickgold.florisboard.ime.dictionary.DictionaryManager.default()
@@ -275,8 +275,8 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
             val candidates: List<LatinSuggestion>,
         )
         val perLocale = locales.map { locale ->
-            val langCode = LatinDictionaryStore.normalizeLanguageCode(locale.language)
-            val dict = dictionaryStore.dictionaryForLanguage(locale.language)
+            val langCode = LatinDictionaryStore.normalizeLanguageCode(locale.languageTag())
+            val dict = dictionaryStore.dictionaryForLanguage(locale.languageTag())
             dev.patrickgold.florisboard.ime.dictionary.DictionaryManager.default()
                 .hydrateOverlay(locale)
             val overlay = dev.patrickgold.florisboard.ime.dictionary.UserDictionaryOverlay
@@ -389,15 +389,29 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
         // and common short continuations before personal history is rich enough.
         ColdStartNextWordPriors.suggest(
             textBeforeCursor = before,
-            languageCode = subtype.primaryLocale.language,
+            languageCode = subtype.primaryLocale.languageTag(),
             maxCandidateCount = maxCandidateCount,
         ).forEach { prior ->
             if (merged.size < maxCandidateCount && seen.add(prior.word.lowercase())) {
                 addMerged(prior.word, prior.confidence)
             }
         }
+        if (before.isNotBlank() && merged.isEmpty() && prefs.correction.multilingualSuggestions.get()) {
+            for (locale in subtype.secondaryLocales) {
+                ColdStartNextWordPriors.suggest(
+                    textBeforeCursor = before,
+                    languageCode = locale.languageTag(),
+                    maxCandidateCount = maxCandidateCount,
+                ).forEach { prior ->
+                    if (merged.size < maxCandidateCount && seen.add(prior.word.lowercase())) {
+                        addMerged(prior.word, prior.confidence)
+                    }
+                }
+                if (merged.size >= maxCandidateCount) break
+            }
+        }
         if (merged.size < maxCandidateCount) {
-            val dict = dictionaryStore.dictionaryForLanguage(subtype.primaryLocale.language)
+            val dict = dictionaryStore.dictionaryForLanguage(subtype.primaryLocale.languageTag())
             val bootstrap = dict.topByFrequency(maxCandidateCount * 2)
             for (word in bootstrap) {
                 if (merged.size >= maxCandidateCount) break
@@ -490,7 +504,16 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
     }
 
     override suspend fun getListOfWords(subtype: Subtype): List<String> {
-        return dictionary(subtype).glideWords
+        val prefs by FlorisPreferenceStore
+        val locales = subtype.locales()
+        val multilingual = prefs.correction.multilingualSuggestions.get() && locales.size > 1
+        if (!multilingual) {
+            return dictionary(subtype).glideWords
+        }
+        return locales
+            .distinctBy { it.languageTag() }
+            .flatMap { locale -> dictionaryStore.dictionaryForLanguage(locale.languageTag()).glideWords }
+            .distinct()
     }
 
     /**
@@ -501,11 +524,20 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
      */
     override suspend fun getFrequencyForWord(subtype: Subtype, word: String): Double {
         val normalizedWord = LatinDictionarySuggester.normalizeWord(word) ?: word.lowercase()
-        val bundled = dictionary(subtype).frequencyFor(normalizedWord)
-        val learned = dev.patrickgold.florisboard.ime.dictionary.UserDictionaryOverlay.get()
-            .frequencyFor(normalizedWord, subtype.primaryLocale)
-            .coerceIn(0, 255) / 255.0
-        return maxOf(bundled, learned)
+        val prefs by FlorisPreferenceStore
+        val locales = if (prefs.correction.multilingualSuggestions.get()) {
+            subtype.locales().distinctBy { it.languageTag() }
+        } else {
+            listOf(subtype.primaryLocale)
+        }
+        val overlayManager = dev.patrickgold.florisboard.ime.dictionary.UserDictionaryOverlay.get()
+        var best = 0.0
+        for (locale in locales) {
+            val bundled = dictionaryStore.dictionaryForLanguage(locale.languageTag()).frequencyFor(normalizedWord)
+            val learned = overlayManager.frequencyFor(normalizedWord, locale).coerceIn(0, 255) / 255.0
+            best = maxOf(best, bundled, learned)
+        }
+        return best
     }
 
     /**
@@ -517,7 +549,7 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
         val normalizedWord = LatinDictionarySuggester.normalizeWord(word) ?: return false
         var slipSomewhere = false
         for (locale in subtype.locales().distinctBy { it.languageTag() }) {
-            val languageCode = LatinDictionaryStore.normalizeLanguageCode(locale.language)
+            val languageCode = LatinDictionaryStore.normalizeLanguageCode(locale.languageTag())
             val dictionary = dictionaryStore.dictionaryForLanguage(languageCode)
             val overlay = dev.patrickgold.florisboard.ime.dictionary.UserDictionaryOverlay.get().viewFor(locale)
             if (overlay.containsKey(normalizedWord)) return false
@@ -542,7 +574,7 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
     }
 
     private suspend fun dictionary(subtype: Subtype): LatinDictionarySnapshot {
-        return dictionaryStore.dictionaryForLanguage(subtype.primaryLocale.language)
+        return dictionaryStore.dictionaryForLanguage(subtype.primaryLocale.languageTag())
     }
 }
 
@@ -828,7 +860,13 @@ internal class LatinDictionaryStore(
         }
 
         fun normalizeLanguageCode(language: String): String {
-            return language
+            val trimmed = language.trim()
+            if (trimmed.isEmpty()) return DefaultLanguageCode
+            val tokens = trimmed.lowercase().split('-', '_')
+            if (tokens.firstOrNull() == "ur" && tokens.drop(1).any { it == "roman" || it == "latn" }) {
+                return "ur_roman"
+            }
+            return trimmed
                 .substringBefore('-')
                 .substringBefore('_')
                 .lowercase()

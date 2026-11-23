@@ -268,7 +268,7 @@ Out of scope:
   `android.permission.VIBRATE`, `android.permission.POST_NOTIFICATIONS`,
   `android.permission.READ_CALENDAR`,
   `android.permission.QUERY_ADVANCED_PROTECTION_MODE`, and
-  `io.github.sysadmindoc.swiftfloris.permission.BIND_MCP` (and any new entry
+  `com.salmanbashir.keys8002.permission.BIND_MCP` (and any new entry
   is justified in the release notes + threat model).
 - [ ] `:app:verifyNoInternetPermission` passes locally. This scans the **source** manifests only.
 - [ ] The merged-manifest gate has run. `verifyNoInternetPermissionMerged<Variant>` is what enforces the

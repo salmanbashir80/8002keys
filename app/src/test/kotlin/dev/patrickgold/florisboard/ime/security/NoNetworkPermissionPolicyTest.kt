@@ -80,8 +80,8 @@ class NoNetworkPermissionPolicyTest : FunSpec({
     test("allows SwiftFloris's own signature permissions") {
         for (
             permission in listOf(
-                "io.github.sysadmindoc.swiftfloris.permission.REGISTER_ADDON",
-                "io.github.sysadmindoc.swiftfloris.permission.BIND_MCP",
+                "com.salmanbashir.keys8002.permission.REGISTER_ADDON",
+                "com.salmanbashir.keys8002.permission.BIND_MCP",
             )
         ) {
             withClue(permission) {
@@ -93,7 +93,7 @@ class NoNetworkPermissionPolicyTest : FunSpec({
     test("does not allow a package to spoof the signature namespace by prefix") {
         // A lookalike package ID must not inherit the namespace exemption.
         NoNetworkPermissionPolicy.isAllowed(
-            "io.github.sysadmindoc.swiftfloris.evil.permission.REGISTER_ADDON",
+            "com.salmanbashir.keys8002.evil.permission.REGISTER_ADDON",
         ) shouldBe false
     }
 

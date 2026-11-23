@@ -12,11 +12,11 @@
       "android.permission.QUERY_ADVANCED_PROTECTION_MODE",
       "android.permission.READ_CALENDAR",
       "android.permission.VIBRATE",
-      "io.github.sysadmindoc.swiftfloris.permission.BIND_MCP"
+      "com.salmanbashir.keys8002.permission.BIND_MCP"
     ],
     "declaredSignaturePermissions": [
-      "io.github.sysadmindoc.swiftfloris.permission.BIND_MCP",
-      "io.github.sysadmindoc.swiftfloris.permission.REGISTER_ADDON"
+      "com.salmanbashir.keys8002.permission.BIND_MCP",
+      "com.salmanbashir.keys8002.permission.REGISTER_ADDON"
     ],
     "networkPermission": false
   },
@@ -31,13 +31,13 @@
       "android.permission.VIBRATE",
       "android.permission.WAKE_LOCK"
     ],
-    "signaturePermissionPrefix": "io.github.sysadmindoc.swiftfloris.permission.",
+    "signaturePermissionPrefix": "com.salmanbashir.keys8002.permission.",
     "baseManifestPermissions": [
-      "io.github.sysadmindoc.swiftfloris.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
-      "io.github.sysadmindoc.swiftfloris.bench.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+      "com.salmanbashir.keys8002.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+      "com.salmanbashir.keys8002.bench.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
     ],
     "baseManifestPermissionPrefixes": [
-      "io.github.sysadmindoc.swiftfloris.debug."
+      "com.salmanbashir.keys8002.debug."
     ]
   },
   "storage": {

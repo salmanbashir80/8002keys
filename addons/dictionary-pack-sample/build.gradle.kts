@@ -25,12 +25,12 @@ val projectMinSdk = providers.gradleProperty("projectMinSdk").get()
 val projectTargetSdk = providers.gradleProperty("projectTargetSdk").get()
 
 configure<ApplicationExtension> {
-    namespace = "io.github.sysadmindoc.swiftfloris.addons.dictionarypack.sample"
+    namespace = "com.salmanbashir.keys8002.addons.dictionarypack.sample"
     compileSdk = projectCompileSdk.toInt()
     buildToolsVersion = tools.versions.buildTools.get()
 
     defaultConfig {
-        applicationId = "io.github.sysadmindoc.swiftfloris.addons.dictionarypack.sample"
+        applicationId = "com.salmanbashir.keys8002.addons.dictionarypack.sample"
         minSdk = projectMinSdk.toInt()
         targetSdk = projectTargetSdk.toInt()
         versionCode = 1

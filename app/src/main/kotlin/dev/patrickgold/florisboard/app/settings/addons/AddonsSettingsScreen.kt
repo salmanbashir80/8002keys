@@ -428,7 +428,7 @@ private fun InstalledAddonRow(manifest: AddonManifest) {
         },
         onClick = {
             val report = AddonProvenanceReport.from(manifest)
-            val clip = ClipData.newPlainText("SwiftFloris addon provenance", report.toJson())
+            val clip = ClipData.newPlainText("8002Keys addon provenance", report.toJson())
             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
             cm.setPrimaryClip(clip)
             Toast.makeText(context, R.string.settings__addons__provenance_copied, Toast.LENGTH_SHORT).show()
@@ -458,7 +458,7 @@ private fun PreviewInstalledAddonRow() {
             manifest = previewAddonManifest(
                 type = AddonType.THEME_PACK,
                 displayName = "Midnight Contrast Theme Pack",
-                packageName = "io.github.sysadmindoc.swiftfloris.addons.midnight",
+                packageName = "com.salmanbashir.keys8002.addons.midnight",
             ),
         )
     }
@@ -471,7 +471,7 @@ private fun PreviewDictionaryPackRow() {
     val manifest = previewAddonManifest(
         type = AddonType.DICTIONARY_PACK,
         displayName = "Esperanto Sample Dictionary",
-        packageName = "io.github.sysadmindoc.swiftfloris.addons.dictionary.eo",
+        packageName = "com.salmanbashir.keys8002.addons.dictionary.eo",
     )
     val descriptor = DictionaryPackDescriptor(
         schema = DictionaryPackDescriptor.SUPPORTED_SCHEMA,

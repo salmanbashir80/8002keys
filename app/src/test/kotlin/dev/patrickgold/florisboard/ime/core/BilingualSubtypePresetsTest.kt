@@ -79,6 +79,26 @@ class BilingualSubtypePresetsTest : FunSpec({
 
         BilingualSubtypePresets.canonicalFrom(presets) shouldBe emptyList()
     }
+
+    test("canonical bilingual presets include English and Roman Urdu pairs when ur-PK-roman is available") {
+        val presets = listOf(
+            preset(FlorisLocale.from("en", "US")),
+            preset(FlorisLocale.from("es", "ES")),
+            preset(FlorisLocale.from("fr", "FR")),
+            preset(FlorisLocale.from("de", "DE")),
+            preset(FlorisLocale.from("ur", "PK", "roman")),
+        )
+
+        val bilingual = BilingualSubtypePresets.canonicalFrom(presets)
+
+        bilingual.map { it.locale.languageTag() to it.secondaryLocales.map(FlorisLocale::languageTag) } shouldBe listOf(
+            "en-US" to listOf("es-ES"),
+            "en-US" to listOf("fr-FR"),
+            "en-US" to listOf("de-DE"),
+            "en-US" to listOf("ur-PK-roman"),
+            "ur-PK-roman" to listOf("en-US"),
+        )
+    }
 })
 
 private fun preset(

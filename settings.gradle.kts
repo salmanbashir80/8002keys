@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-rootProject.name = "SwiftFloris"
+rootProject.name = "Keys8002"
 
 pluginManagement {
     repositories {

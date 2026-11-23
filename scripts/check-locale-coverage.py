@@ -219,7 +219,8 @@ FORK_ADDED_PREFIXES = (
 # Raised deliberately, with the date and reason, every time fork-added source strings grow.
 # 2026-08-20: 295 -> 297 for the two Settings -> MCP strings that say no daemon can be bound
 # in this build. Untranslated like the rest of the fork-added set; see CONTRIBUTING.md.
-FORK_ADDED_SOURCE_CEILING = 297
+# 2026-11-23: 297 -> 299 to match pinned upstream SwiftFloris v1.9.70 baseline strings (unchanged in 8002Keys).
+FORK_ADDED_SOURCE_CEILING = 299
 
 
 def fork_added_names(resources: dict[str, "Resource"]) -> set[str]:

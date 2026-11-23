@@ -701,6 +701,15 @@
       }
     },
     {
+      "languageTag": "ur-PK-roman",
+      "composer": "org.florisboard.composers:appender",
+      "currencySet": "org.florisboard.currencysets:pakistani_rupee",
+      "popupMapping": "org.florisboard.localization:en",
+      "preferred": {
+        "characters": "org.florisboard.layouts:qwerty"
+      }
+    },
+    {
       "languageTag": "zh-CN-zhengma",
       "composer": "org.florisboard.composers:appender",
       "nlpProviders": {

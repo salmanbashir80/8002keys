@@ -88,4 +88,15 @@ class LatinScriptLanguageIdentifierTest : FunSpec({
         scores["de"] shouldBe 1.0
         scores.getValue("de") shouldBeGreaterThan scores.getValue("en")
     }
+
+    test("scores Roman Urdu markers strongly when enrolled with English") {
+        val scores = LatinScriptLanguageIdentifier.score(
+            currentWord = "shukriya",
+            previousWords = listOf("aap", "kaise", "hain"),
+            locales = listOf("en", "ur_roman"),
+        )
+
+        scores["ur_roman"] shouldBe 1.0
+        scores.getValue("ur_roman") shouldBeGreaterThan scores.getValue("en")
+    }
 })

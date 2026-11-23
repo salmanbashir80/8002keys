@@ -21,7 +21,7 @@ import io.kotest.matchers.shouldBe
 
 class GlideTypingLanguageSupportTest : FunSpec({
     test("supported language profiles match the bundled glide dictionaries") {
-        GlideTypingLanguageSupport.supportedLanguageCodes() shouldBe setOf("en", "de", "es", "fr", "it", "pt")
+        GlideTypingLanguageSupport.supportedLanguageCodes() shouldBe setOf("en", "de", "es", "fr", "it", "pt", "ur_roman")
     }
 
     test("English uses the expanded statistical profile") {
@@ -31,8 +31,8 @@ class GlideTypingLanguageSupportTest : FunSpec({
         profile?.quality shouldBe GlideTypingQuality.EXPANDED_STATISTICAL
     }
 
-    test("imported Latin dictionaries use the imported statistical profile") {
-        listOf("de", "es", "fr", "it", "pt").forEach { language ->
+    test("imported Latin and Roman Urdu dictionaries use the imported statistical profile") {
+        listOf("de", "es", "fr", "it", "pt", "ur-PK-roman", "ur_roman").forEach { language ->
             val profile = GlideTypingLanguageSupport.profileFor(language)
 
             profile?.engine shouldBe GlideTypingEngine.STATISTICAL

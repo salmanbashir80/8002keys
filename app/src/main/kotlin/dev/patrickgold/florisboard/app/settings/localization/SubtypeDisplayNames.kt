@@ -22,6 +22,13 @@ import dev.patrickgold.florisboard.ime.core.SubtypePreset
 import dev.patrickgold.florisboard.lib.FlorisLocale
 
 internal fun FlorisLocale.displayName(displayLanguageNamesIn: DisplayLanguageNamesIn): String {
+    if (language == "ur" && variant.equals("roman", ignoreCase = true)) {
+        return if (country.equals("PK", ignoreCase = true)) {
+            "Roman Urdu (Pakistan)"
+        } else {
+            "Roman Urdu"
+        }
+    }
     return when (displayLanguageNamesIn) {
         DisplayLanguageNamesIn.SYSTEM_LOCALE -> displayName()
         DisplayLanguageNamesIn.NATIVE_LOCALE -> displayName(this)

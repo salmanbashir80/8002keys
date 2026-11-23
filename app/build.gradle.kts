@@ -104,7 +104,7 @@ kotlin {
         jvmTarget.set(JvmTarget.JVM_11)
         // Kotlin 2.4.x defaults moduleName to "{group}:{project}" which contains colons;
         // KSP 2.3.9 chokes on colons in generated identifiers (ksp#2964). Remove when KSP 2.4.x ships.
-        moduleName.set("swiftfloris_app")
+        moduleName.set("keys8002_app")
         freeCompilerArgs.set(listOf(
             "-opt-in=kotlin.contracts.ExperimentalContracts",
             "-jvm-default=enable",
@@ -170,7 +170,7 @@ configure<ApplicationExtension> {
         // authorities (${applicationId} placeholders), and the
         // AppPackageContract action/permission namespaces all derive from
         // this value.
-        applicationId = "io.github.sysadmindoc.swiftfloris"
+        applicationId = "com.salmanbashir.keys8002"
         minSdk = projectMinSdk.toInt()
         targetSdk = projectTargetSdk.toInt()
         versionCode = projectVersionCode.toInt()
@@ -245,7 +245,6 @@ configure<ApplicationExtension> {
 
     buildTypes {
         named("debug") {
-            applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug+${getGitCommitHash(short = true).get()}"
 
             isDebuggable = true

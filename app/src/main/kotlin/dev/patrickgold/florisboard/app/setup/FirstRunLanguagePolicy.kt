@@ -81,12 +81,20 @@ internal object FirstRunLanguagePolicy {
      */
     fun bestMatch(systemLocale: Locale, presets: List<SubtypePreset>): SubtypePreset? {
         val language = systemLocale.language
+        if (language == "ur" && systemLocale.script == "Latn") {
+            return presets.firstOrNull { preset ->
+                preset.secondaryLocales.isEmpty() &&
+                    preset.locale.language == "ur" &&
+                    preset.locale.variant.equals("roman", ignoreCase = true)
+            }
+        }
         val presetScript = PresetScripts[language]
         if (presetScript != null && systemLocale.script.isNotEmpty() && systemLocale.script != presetScript) return null
         val candidates = presets.filter { preset ->
             preset.secondaryLocales.isEmpty() &&
                 preset.locale.language == language &&
                 preset.locale.variant.lowercase(Locale.ROOT) !in UncommonVariants &&
+                !(language == "ur" && preset.locale.variant.equals("roman", ignoreCase = true)) &&
                 sameChineseScript(systemLocale, preset.locale)
         }
         if (candidates.isEmpty()) return null

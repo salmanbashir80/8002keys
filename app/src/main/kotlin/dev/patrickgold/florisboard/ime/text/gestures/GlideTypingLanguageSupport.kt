@@ -63,10 +63,17 @@ object GlideTypingLanguageSupport {
             engine = GlideTypingEngine.STATISTICAL,
             quality = GlideTypingQuality.IMPORTED_STATISTICAL,
         ),
+        GlideTypingLanguageProfile(
+            languageCode = "ur_roman",
+            engine = GlideTypingEngine.STATISTICAL,
+            quality = GlideTypingQuality.IMPORTED_STATISTICAL,
+        ),
     ).associateBy { profile -> profile.languageCode }
 
     fun profileFor(languageCode: String): GlideTypingLanguageProfile? {
-        return profiles[languageCode.substringBefore('-').substringBefore('_').lowercase()]
+        val normalized = dev.patrickgold.florisboard.ime.nlp.latin.LatinDictionaryStore
+            .normalizeLanguageCode(languageCode)
+        return profiles[normalized]
     }
 
     fun supportedLanguageCodes(): Set<String> {

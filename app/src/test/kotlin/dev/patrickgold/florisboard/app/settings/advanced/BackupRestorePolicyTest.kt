@@ -190,10 +190,17 @@ class BackupRestorePolicyTest : FunSpec({
     }
 
     test("restore archive validation accepts both current and legacy application IDs") {
-        // The app-ID migration data path: a backup created by the
-        // pre-migration install (dev.patrickgold.florisboard[.debug]) must
-        // restore into the io.github.sysadmindoc.swiftfloris install without
-        // a vendor warning, and vice versa.
+        // The app-ID migration data path: backups created by 8002Keys,
+        // SwiftFloris (io.github.sysadmindoc.swiftfloris), or pre-migration
+        // FlorisBoard (dev.patrickgold.florisboard[.debug]) must restore
+        // without a vendor warning.
+        BackupRestorePolicy.validateRestoreArchive(
+            metadata = validMetadata.copy(packageName = "com.salmanbashir.keys8002"),
+            currentVersionCode = 1933,
+            minimumVersionCode = Restore.MIN_VERSION_CODE,
+            expectedPackagePrefixes = Restore.ACCEPTED_PACKAGE_PREFIXES,
+            hasRestorableContent = true,
+        ) shouldBe RestoreArchiveValidation(warningId = null, errorId = null)
         BackupRestorePolicy.validateRestoreArchive(
             metadata = validMetadata.copy(packageName = "io.github.sysadmindoc.swiftfloris"),
             currentVersionCode = 1933,

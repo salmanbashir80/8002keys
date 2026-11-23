@@ -21,24 +21,24 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 
 class CrashReportFormatterTest : FunSpec({
-    test("generated crash report uses SwiftFloris identity and redaction fields") {
+    test("generated crash report uses 8002Keys identity and redaction fields") {
         val report = CrashReportFormatter.formatReport(
             environment = CrashReportEnvironment(
                 versionNameMarkdown = "[1.9.54](https://example.invalid/release)",
                 versionCode = 2103,
-                applicationId = "io.github.sysadmindoc.swiftfloris.debug",
+                applicationId = "com.salmanbashir.keys8002",
                 buildType = "debug",
                 buildCommitHash = "abc123",
                 installSource = "com.android.packageinstaller",
                 deviceName = "Pixel Test",
                 androidVersion = "Android 16 (SDK 36)",
             ),
-            debugLogHeader = "======= APP INFO =======\nName                : SwiftFloris",
+            debugLogHeader = "======= APP INFO =======\nName                : 8002Keys",
             stacktraces = listOf(CrashUtility.Stacktrace("trace-1.stacktrace", "boom")),
         )
 
-        report shouldContain "- SwiftFloris [1.9.54](https://example.invalid/release) (2103)"
-        report shouldContain "- Package: io.github.sysadmindoc.swiftfloris.debug"
+        report shouldContain "- 8002Keys [1.9.54](https://example.invalid/release) (2103)"
+        report shouldContain "- Package: com.salmanbashir.keys8002"
         report shouldContain "- Build type: debug"
         report shouldContain "- Build commit: abc123"
         report shouldContain "- Install source: com.android.packageinstaller"

@@ -260,16 +260,20 @@ class FirstRunLanguagePolicyTest : FunSpec({
 
     test("Hindi, Urdu and Kurdish follow the script their one preset types") {
         fun layoutOf(language: String): String {
-            return presets.single { it.locale.language == language }.preferred.characters.componentId
+            return presets.single { it.locale.language == language && it.locale.variant.isEmpty() }
+                .preferred.characters.componentId
         }
         layoutOf("hi") shouldBe "hindi_in"
         layoutOf("ur") shouldBe "urdu_phonetic"
+        presets.single { it.locale.languageTag() == "ur-PK-roman" }
+            .preferred.characters.componentId shouldBe "qwerty"
         layoutOf("ku") shouldBe "kurdish_kurmanci"
 
         tagOf(Locale.forLanguageTag("hi-IN")) shouldBe "hi-IN"
         tagOf(Locale.forLanguageTag("hi-Latn-IN")).shouldBeNull()
         tagOf(Locale.forLanguageTag("ur-PK")) shouldBe "ur-PK"
-        tagOf(Locale.forLanguageTag("ur-Latn-PK")).shouldBeNull()
+        tagOf(Locale.forLanguageTag("ur-Arab-PK")) shouldBe "ur-PK"
+        tagOf(Locale.forLanguageTag("ur-Latn-PK")) shouldBe "ur-PK-roman"
         tagOf(Locale.forLanguageTag("ku-TR")) shouldBe "ku"
         tagOf(Locale.forLanguageTag("ku-Arab-IQ")).shouldBeNull()
     }

@@ -172,12 +172,12 @@ class AddonManifestTest : FunSpec({
 
     test("ADDON_SIGNATURE_PERMISSION namespace matches the manifest declaration") {
         AddonContract.ADDON_SIGNATURE_PERMISSION shouldBe
-            "io.github.sysadmindoc.swiftfloris.permission.REGISTER_ADDON"
+            "com.salmanbashir.keys8002.permission.REGISTER_ADDON"
     }
 
     test("REGISTER_ADDON action namespace matches the manifest queries block") {
         AddonContract.Action.REGISTER shouldBe
-            "io.github.sysadmindoc.swiftfloris.action.REGISTER_ADDON"
+            "com.salmanbashir.keys8002.action.REGISTER_ADDON"
     }
 
     test("main manifest declares package visibility for every addon action") {
@@ -221,8 +221,8 @@ class AddonManifestTest : FunSpec({
         // ever stops covering it, every addon stops enrolling.
         AddonEnumerator.firstDisallowedPermission(
             requestedPermissions = arrayOf(
-                "io.github.sysadmindoc.swiftfloris.permission.REGISTER_ADDON",
-                "io.github.sysadmindoc.swiftfloris.permission.BIND_MCP",
+                "com.salmanbashir.keys8002.permission.REGISTER_ADDON",
+                "com.salmanbashir.keys8002.permission.BIND_MCP",
                 "android.permission.POST_NOTIFICATIONS",
                 "android.permission.VIBRATE",
             ),

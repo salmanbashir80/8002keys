@@ -110,6 +110,9 @@ result
 !README.md
 !CONTRIBUTING.md
 !docs/
+!docs/*.md
+!docs/**/
+!docs/**/*.md
 !docs/SECURITY.md
 !docs/REPRODUCIBLE_BUILDS.md
 !docs/THREAT_MODEL.md

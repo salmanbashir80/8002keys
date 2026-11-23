@@ -164,7 +164,7 @@ private val testStrings = mapOf(
     R.string.settings__privacy_audit__home_summary to "Review local privacy and addon activity",
     R.string.settings__privacy_posture__automation_title to "Tasker automation",
     R.string.settings__privacy_posture__automation_summary to
-        "Off by default. When enabled, automation apps can send validated SwiftFloris actions.",
+        "Off by default. When enabled, automation apps can send validated 8002Keys actions.",
     R.string.settings__voice_input__title to "Voice input",
     R.string.settings__home__voice_input_summary to "FUTO setup, offline language models, and voice keyboard status",
     R.string.settings__migration_assistant__title to "Migration assistant",

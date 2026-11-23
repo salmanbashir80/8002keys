@@ -1,8 +1,8 @@
-<p><b>SwiftFloris</b> is a privacy-first Android keyboard, forked from FlorisBoard and pushed toward SwiftKey-class multilingual typing without the cloud. It ships under Apache-2.0, holds no <tt>INTERNET</tt> permission, and binds zero accounts.</p>
+<p><b>8002Keys</b> is a privacy-first Android keyboard, forked from FlorisBoard and pushed toward SwiftKey-class multilingual typing without the cloud. It ships under Apache-2.0, holds no <tt>INTERNET</tt> permission, and binds zero accounts.</p>
 
 <p><b>Zero cloud processing. Zero telemetry. Zero account. All features work offline.</b> The no-network promise is pinned by a Gradle build gate (<tt>verifyNoInternetPermission</tt>) that fails the build if any <tt>INTERNET</tt>, <tt>ACCESS_NETWORK_STATE</tt>, <tt>ACCESS_WIFI_STATE</tt>, <tt>CHANGE_NETWORK_STATE</tt>, or <tt>CHANGE_WIFI_STATE</tt> permission is declared in the app manifest.</p>
 
-<p><b>Migrating from SwiftKey?</b> Microsoft retired standalone SwiftKey accounts on 2026-05-31, deleting non-Microsoft-account learned data permanently. SwiftFloris imports your <tt>swiftkey-cloud.json</tt> cloud export directly via Settings → Personal dictionary → Import. See the in-app migration walkthrough.</p>
+<p><b>Migrating from SwiftKey?</b> Microsoft retired standalone SwiftKey accounts on 2026-05-31, deleting non-Microsoft-account learned data permanently. 8002Keys imports your <tt>swiftkey-cloud.json</tt> cloud export directly via Settings → Personal dictionary → Import. See the in-app migration walkthrough.</p>
 
 <p><b>Typing features:</b></p>
 <ul>
@@ -31,4 +31,4 @@
 
 <p><b>Form factors:</b> floating mode, split mode (tablets ≥ 600dp), one-handed mode, dynamic font scaling, hardware keyboard layout import (Windows KLC, macOS .keylayout, Keyman LDML / .kmp).</p>
 
-<p><b>Distribution:</b> GitHub Releases (canonical), Obtainium one-tap subscribe URL, and prepared F-Droid metadata under <tt>io.github.sysadmindoc.swiftfloris</tt>. GitHub/Obtainium APKs are signed by the SwiftFloris release key and published with SHA-256 manifests; F-Droid, once accepted, is a separate Android signing channel. Not on Google Play by design — Play forces target-SDK churn and Integrity-API tradeoffs that conflict with the no-telemetry posture.</p>
+<p><b>Distribution:</b> GitHub Releases (canonical), Obtainium one-tap subscribe URL, and prepared F-Droid metadata under <tt>com.salmanbashir.keys8002</tt>. GitHub/Obtainium APKs are signed by the 8002Keys release key and published with SHA-256 manifests; F-Droid, once accepted, is a separate Android signing channel. Not on Google Play by design — Play forces target-SDK churn and Integrity-API tradeoffs that conflict with the no-telemetry posture.</p>

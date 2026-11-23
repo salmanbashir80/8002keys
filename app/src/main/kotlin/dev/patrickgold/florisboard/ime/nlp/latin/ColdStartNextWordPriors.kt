@@ -403,6 +403,47 @@ internal object ColdStartNextWordPriors {
         "to je" to listOf("dobře", "super", "pravda"),
     )
 
+    private val RomanUrduSentenceStart = listOf(
+        "kya",
+        "aap",
+        "mein",
+        "hum",
+        "yeh",
+        "woh",
+        "assalam",
+        "theek",
+    )
+
+    private val RomanUrduContinuations = mapOf(
+        "assalam" to listOf("alaikum", "o"),
+        "walaikum" to listOf("assalam"),
+        "kya" to listOf("haal", "kar", "hua", "baat", "ho"),
+        "aap" to listOf("kaise", "kahan", "kya", "theek"),
+        "mein" to listOf("theek", "abhi", "aaj", "ghar"),
+        "hum" to listOf("aaj", "abhi", "log", "sab"),
+        "yeh" to listOf("hai", "bohot", "theek", "kya"),
+        "woh" to listOf("hai", "abhi", "gaya", "theek"),
+        "theek" to listOf("hai", "hoon", "hain"),
+        "kaise" to listOf("hain", "ho", "hai"),
+        "bohot" to listOf("acha", "shukriya", "zyada"),
+        "aaj" to listOf("kal", "raat", "subah", "shaam"),
+        "kal" to listOf("subah", "shaam", "milen", "aao"),
+        "abhi" to listOf("tak", "aa", "ghar", "kaam"),
+        "allah" to listOf("hafiz", "khair", "kareem"),
+        "inshallah" to listOf("kal", "aaj", "zaroor"),
+        "subah" to listOf("bakhair", "ko"),
+        "shukriya" to listOf("bhai", "yaar", "bohot"),
+    )
+
+    private val RomanUrduPhraseContinuations = mapOf(
+        "assalam alaikum" to listOf("kaise", "kya", "bhai"),
+        "kya haal" to listOf("hai", "hain"),
+        "mein theek" to listOf("hoon", "hun", "aap"),
+        "aap kaise" to listOf("hain", "ho"),
+        "bohot shukriya" to listOf("bhai", "aapka"),
+        "allah hafiz" to listOf("take", "phir"),
+    )
+
     private val PriorSets = mapOf(
         "en" to PriorSet(SentenceStart, Continuations, PhraseContinuations),
         "cs" to PriorSet(CzechSentenceStart, CzechContinuations, CzechPhraseContinuations),
@@ -411,5 +452,6 @@ internal object ColdStartNextWordPriors {
         "fr" to PriorSet(FrenchSentenceStart, FrenchContinuations, FrenchPhraseContinuations),
         "it" to PriorSet(ItalianSentenceStart, ItalianContinuations, ItalianPhraseContinuations),
         "pt" to PriorSet(PortugueseSentenceStart, PortugueseContinuations, PortuguesePhraseContinuations),
+        "ur_roman" to PriorSet(RomanUrduSentenceStart, RomanUrduContinuations, RomanUrduPhraseContinuations),
     )
 }

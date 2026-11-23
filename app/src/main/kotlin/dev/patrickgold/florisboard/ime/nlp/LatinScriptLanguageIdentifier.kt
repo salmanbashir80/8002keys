@@ -102,6 +102,10 @@ internal object LatinScriptLanguageIdentifier {
     }
 
     private fun String.normalizedLanguageKey(): String {
+        val tokens = trim().lowercase(Locale.ROOT).split('-', '_')
+        if (tokens.firstOrNull() == "ur" && tokens.drop(1).any { it == "roman" || it == "latn" }) {
+            return "ur_roman"
+        }
         return substringBefore('-')
             .substringBefore('_')
             .lowercase(Locale.ROOT)
@@ -201,6 +205,19 @@ internal object LatinScriptLanguageIdentifier {
                 "obr", "brig", "voce", "mui", "ito", "tam", "bem", "qua",
             ),
             prefixes = setOf("que", "na", "nao", "obr", "obri", "par", "vo", "voc", "mui"),
+        ),
+        "ur_roman" to LanguageProfile(
+            commonWords = setOf(
+                "hai", "hain", "nahi", "nahin", "kya", "mein", "aap", "tum", "hum", "aur",
+                "yeh", "woh", "raha", "rahi", "rahe", "karna", "karo", "theek", "bohot",
+                "acha", "shukriya", "inshallah", "assalam", "alaikum", "bhai", "yaar", "abhi",
+            ),
+            charNgrams = setOf(
+                "hai", "nah", "ahi", "kya", "mein", "aap", "rah", "kar", "the", "eek",
+                "boh", "oho", "hot", "ach", "cha", "shu", "ukr", "iya", "ala", "aai",
+                "kh", "bh", "ph", "gh", "ch", "sh", "zh", "aa", "ee", "oo",
+            ),
+            prefixes = setOf("nah", "kya", "mei", "the", "boh", "shu", "ass", "ala", "ins", "kar"),
         ),
     )
 }

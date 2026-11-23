@@ -450,9 +450,13 @@ private fun TextKeyButton(
         FlorisImeUi.Attr.Mode to evaluator.keyboard.mode.toString(),
         FlorisImeUi.Attr.ShiftState to evaluator.state.inputShiftState.toString(),
     )
-    val subtypeLanguage = evaluator.subtype.primaryLocale.language
-    val nastaliqFontFamily = remember(context, subtypeLanguage) {
-        if (NastaliqFontProvider.isUrduLanguage(subtypeLanguage)) {
+    val subtypeLocale = evaluator.subtype.primaryLocale
+    val subtypeLanguage = subtypeLocale.language
+    val nastaliqFontFamily = remember(context, subtypeLanguage, subtypeLocale.variant) {
+        if (
+            NastaliqFontProvider.isUrduLanguage(subtypeLanguage) &&
+            !subtypeLocale.variant.equals("roman", ignoreCase = true)
+        ) {
             NastaliqFontProvider.bundledFontFamily(context)
         } else {
             null
