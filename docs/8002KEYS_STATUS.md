@@ -2,7 +2,7 @@
 
 ## Verified
 - Owner: `salmanbashir80` (GitHub user ID `281007672`).
-- Repository: `https://github.com/salmanbashir80/8002keys` — **PRIVATE**.
+- Repository: `https://github.com/salmanbashir80/8002keys` — **PUBLIC**.
 - Initial commits (`3f5d9fa`, `a2e0dee`, `f822f76`, `ecb8062`) preserved and merged cleanly with pinned upstream `SysAdminDoc/SwiftFloris` v1.9.70 (`e13bf0165dbfec4ff3f7d559f5f57899e6549575`, full history preserved).
 - License attribution preserved: `LICENSE` (Apache-2.0), `NOTICE`, `LICENSES/`, `docs/INITIAL_REPOSITORY_README.md`, and `docs/UPSTREAM_README.md`.
 - Rebranded installed identity:

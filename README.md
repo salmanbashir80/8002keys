@@ -1,6 +1,6 @@
 # 8002Keys
 
-Private, offline Android keyboard owned by Salman Bashir (`com.salmanbashir.keys8002`), forked from [SwiftFloris](https://github.com/SysAdminDoc/SwiftFloris) (v1.9.70, commit `e13bf0165dbfec4ff3f7d559f5f57899e6549575`), derived from [FlorisBoard](https://github.com/florisboard/florisboard), and licensed under Apache-2.0 (`LICENSE`, `NOTICE`, `LICENSES/`).
+Offline Android keyboard owned by Salman Bashir (`com.salmanbashir.keys8002`), forked from [SwiftFloris](https://github.com/SysAdminDoc/SwiftFloris) (v1.9.70, commit `e13bf0165dbfec4ff3f7d559f5f57899e6549575`), derived from [FlorisBoard](https://github.com/florisboard/florisboard), and licensed under Apache-2.0 (`LICENSE`, `NOTICE`, `LICENSES/`).
 
 ## Key Features
 
