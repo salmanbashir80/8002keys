@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Debug-only manifest overlay. Adds the <profileable> tag so adb-attached
+    profilers (Macrobenchmark, simpleperf, perfetto) can attach to the IME
+    process. Intentionally NOT present in release/beta builds: shell-attached
+    profiling on a production privacy keyboard is an unnecessary attack surface
+    (heap dumps would expose freshly-typed text), and it is not required for
+    normal end-user functionality.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        The main manifest declares the addon and MCP signature permissions
+        under the release package's names. A debug-key build declaring the
+        same names fails to install next to the release with
+        INSTALL_FAILED_DUPLICATE_PERMISSION, so the debug build leaves the
+        declarations to the release. Its uses-permission stays: with the
+        release installed the grant is refused (different signer), which is
+        what happened anyway, so signature-gated addon and MCP binding can
+        only be exercised from a release-signed build.
+    -->
+    <permission
+        android:name="io.github.sysadmindoc.swiftfloris.permission.REGISTER_ADDON"
+        tools:node="remove"/>
+    <permission
+        android:name="io.github.sysadmindoc.swiftfloris.permission.BIND_MCP"
+        tools:node="remove"/>
+
+    <application>
+        <profileable android:shell="true"/>
+
+        <!--
+            ROADMAP §7 Next-12.2a — Roborazzi screenshot-test host.
+            Declared in the debug overlay only so it never reaches release
+            builds. `exported=false` keeps it unreachable to external
+            apps even on debug devices.
+        -->
+        <activity
+            android:name="dev.patrickgold.florisboard.screenshot.RoborazziHostActivity"
+            android:exported="false"/>
+    </application>
+</manifest>

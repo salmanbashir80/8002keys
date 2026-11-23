@@ -1,0 +1,191 @@
+/*
+ * Copyright (C) 2026 SwiftFloris Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.patrickgold.florisboard.ime.mcp
+
+import android.content.pm.PackageManager
+import dev.patrickgold.florisboard.ime.security.NoNetworkPermissionPolicy
+import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.shouldBe
+
+/**
+ * Pure-JVM coverage of [McpAndroidDiscoverer.shapeCandidate].
+ *
+ * The Bundle / ResolveInfo / ServiceInfo lifting happens in
+ * [McpAndroidDiscoverer.serviceAttrsFrom]; this test feeds the
+ * already-lifted [McpAndroidDiscoverer.ServiceAttrs] shape directly,
+ * matching the way `runDiscovery` decomposes the pipeline.
+ */
+class McpAndroidDiscovererTest : FunSpec({
+
+    val catalogJson = """{"tools":[{"name":"calendar.next_event","description":"d","parameterSchema":"{}"}]}"""
+    val signingCert = "AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:" +
+        "AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA"
+
+    fun attrs(
+        packageName: String = "com.daemon.a",
+        className: String = "com.daemon.a.Svc",
+        permission: String? = McpBridgeContract.PERMISSION_BIND_MCP,
+        protocolVersion: Int = 1,
+        catalogResourceId: Int = 42,
+        signingCertSha256: String? = signingCert,
+        requestedPermissions: Set<String> = emptySet(),
+    ) = McpAndroidDiscoverer.ServiceAttrs(
+        packageName = packageName,
+        className = className,
+        permission = permission,
+        protocolVersion = protocolVersion,
+        catalogResourceId = catalogResourceId,
+        signingCertSha256 = signingCertSha256,
+        requestedPermissions = requestedPermissions,
+    )
+
+    test("returns a DiscoveryCandidate for a well-formed ServiceAttrs with non-blank catalog") {
+        val cand = McpAndroidDiscoverer.shapeCandidate(attrs()) { pkg, resId ->
+            pkg shouldBe "com.daemon.a"
+            resId shouldBe 42
+            catalogJson
+        }
+        cand shouldBe DiscoveryCandidate(
+            packageName = "com.daemon.a",
+            daemonClassName = "com.daemon.a.Svc",
+            protocolVersion = 1,
+            hasBindPermission = true,
+            signingCertSha256 = signingCert,
+            toolCatalogJson = catalogJson,
+        )
+    }
+
+    test("hasBindPermission is false when the service's permission attr doesn't match") {
+        val cand = McpAndroidDiscoverer.shapeCandidate(
+            attrs(permission = "com.other.permission"),
+        ) { _, _ -> catalogJson }
+        cand?.hasBindPermission shouldBe false
+    }
+
+    test("hasBindPermission is false when the service's permission attr is null") {
+        val cand = McpAndroidDiscoverer.shapeCandidate(attrs(permission = null)) { _, _ -> catalogJson }
+        cand?.hasBindPermission shouldBe false
+    }
+
+    test("shapeCandidate carries requested package permissions into the trust core") {
+        val requested = setOf("android.permission.INTERNET", "android.permission.VIBRATE")
+        val cand = McpAndroidDiscoverer.shapeCandidate(
+            attrs(requestedPermissions = requested),
+        ) { _, _ -> catalogJson }
+
+        cand?.requestedPermissions shouldBe requested
+    }
+
+    test("service query requests metadata and package permissions together") {
+        McpAndroidDiscoverer.SERVICE_QUERY_FLAGS and PackageManager.GET_META_DATA shouldBe
+            PackageManager.GET_META_DATA
+        McpAndroidDiscoverer.SERVICE_QUERY_FLAGS and PackageManager.GET_PERMISSIONS shouldBe
+            PackageManager.GET_PERMISSIONS
+    }
+
+    test("null requestedPermissions array is eligible") {
+        McpAndroidDiscoverer.permissionRejection(
+            packageName = "com.daemon.a",
+            className = "com.daemon.a.Svc",
+            snapshot = McpAndroidDiscoverer.RequestedPermissionsSnapshot(
+                requestedPermissions = null,
+                lookupSucceeded = true,
+            ),
+        ) shouldBe null
+    }
+
+    test("every shared no-network permission produces a package-specific rejection") {
+        for (permission in NoNetworkPermissionPolicy.DeniedPermissions) {
+            McpAndroidDiscoverer.permissionRejection(
+                packageName = "com.daemon.a",
+                className = "com.daemon.a.Svc",
+                snapshot = McpAndroidDiscoverer.RequestedPermissionsSnapshot(
+                    requestedPermissions = arrayOf("android.permission.VIBRATE", permission),
+                    lookupSucceeded = true,
+                ),
+            ) shouldBe RejectedMcpDaemon(
+                packageName = "com.daemon.a",
+                daemonClassName = "com.daemon.a.Svc",
+                signingCertSha256 = null,
+                reason = NoNetworkPermissionPolicy.rejectionReason(permission),
+            )
+        }
+    }
+
+    test("permission lookup failure fails closed without inventing a permission") {
+        McpAndroidDiscoverer.permissionRejection(
+            packageName = "com.daemon.a",
+            className = "com.daemon.a.Svc",
+            snapshot = McpAndroidDiscoverer.RequestedPermissionsSnapshot(
+                requestedPermissions = null,
+                lookupSucceeded = false,
+            ),
+        ) shouldBe RejectedMcpDaemon(
+            packageName = "com.daemon.a",
+            daemonClassName = "com.daemon.a.Svc",
+            signingCertSha256 = null,
+            reason = McpAndroidDiscoverer.REASON_PERMISSION_LOOKUP_FAILED,
+        )
+    }
+
+    test("returns null when packageName is blank") {
+        McpAndroidDiscoverer.shapeCandidate(attrs(packageName = "")) { _, _ -> catalogJson } shouldBe null
+    }
+
+    test("returns null when className is blank") {
+        McpAndroidDiscoverer.shapeCandidate(attrs(className = "")) { _, _ -> catalogJson } shouldBe null
+    }
+
+    test("returns null when protocol-version is < 1 (default sentinel)") {
+        McpAndroidDiscoverer.shapeCandidate(attrs(protocolVersion = -1)) { _, _ -> catalogJson } shouldBe null
+        McpAndroidDiscoverer.shapeCandidate(attrs(protocolVersion = 0)) { _, _ -> catalogJson } shouldBe null
+    }
+
+    test("returns null when tool-catalog resource id is 0") {
+        McpAndroidDiscoverer.shapeCandidate(attrs(catalogResourceId = 0)) { _, _ -> catalogJson } shouldBe null
+    }
+
+    test("keeps null signing certificate for trust-layer rejection") {
+        val cand = McpAndroidDiscoverer.shapeCandidate(
+            attrs(signingCertSha256 = null),
+        ) { _, _ -> catalogJson }
+
+        cand?.signingCertSha256 shouldBe null
+    }
+
+    test("returns null when catalogLookup returns null (resource not found)") {
+        McpAndroidDiscoverer.shapeCandidate(attrs()) { _, _ -> null } shouldBe null
+    }
+
+    test("returns null when catalogLookup returns a blank string") {
+        McpAndroidDiscoverer.shapeCandidate(attrs()) { _, _ -> "   " } shouldBe null
+    }
+
+    test("forwards both daemon-package + resource id to the catalogLookup callback") {
+        var seenPkg: String? = null
+        var seenId: Int? = null
+        McpAndroidDiscoverer.shapeCandidate(
+            attrs(packageName = "com.example.x", catalogResourceId = 99),
+        ) { pkg, resId ->
+            seenPkg = pkg
+            seenId = resId
+            catalogJson
+        }
+        seenPkg shouldBe "com.example.x"
+        seenId shouldBe 99
+    }
+})

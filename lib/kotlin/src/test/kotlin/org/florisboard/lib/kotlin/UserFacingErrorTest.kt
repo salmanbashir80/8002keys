@@ -1,0 +1,162 @@
+/*
+ * Copyright (C) 2026 SwiftFloris Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.florisboard.lib.kotlin
+
+import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.ints.shouldBeLessThanOrEqual
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
+import io.kotest.matchers.string.shouldStartWith
+
+class UserFacingErrorTest : FunSpec({
+
+    val fallback = "Something went wrong"
+
+    test("a plain message passes through unchanged") {
+        UserFacingError.summarize(
+            IllegalStateException("Could not open the archive"),
+            fallback,
+        ) shouldBe "Could not open the archive"
+    }
+
+    test("a null, absent or blank message falls back") {
+        UserFacingError.summarize(null, fallback) shouldBe fallback
+        UserFacingError.summarize(RuntimeException(), fallback) shouldBe fallback
+        UserFacingError.summarize(RuntimeException("   "), fallback) shouldBe fallback
+        UserFacingError.summarize(RuntimeException("\n\t "), fallback) shouldBe fallback
+    }
+
+    test("line breaks, tabs and control characters collapse to single spaces") {
+        UserFacingError.sanitize("first\nsecond\r\n\tthird fourth") shouldBe
+            "first second third fourth"
+        UserFacingError.sanitize("nul\u0000bel\u0007end") shouldBe "nul bel end"
+    }
+
+    test("reordering marks do not survive") {
+        // A right-to-left override reverses how the rest of the line reads,
+        // which is how a hostile string is made to look like a different one.
+        val spoofed = "cannot open ‮gnp.exe‬"
+        val sanitized = UserFacingError.sanitize(spoofed)
+
+        sanitized shouldNotContain "‮"
+        sanitized shouldNotContain "‬"
+        sanitized shouldBe "cannot open gnp.exe"
+    }
+
+    test("joiners that carry meaning are kept") {
+        // ZWNJ and ZWJ are category Cf like the overrides above, but they are
+        // part of the word in Persian, Arabic and Indic scripts and part of the
+        // grapheme in emoji sequences. Dropping them rewrites what it shows.
+        UserFacingError.sanitize("می‌روم") shouldBe
+            "می‌روم"
+        UserFacingError.sanitize("👩‍💻") shouldBe
+            "👩‍💻"
+    }
+
+    test("a hostile archive entry name renders as one bounded line") {
+        // ZipUtils quotes the rejected entry name into its SecurityException.
+        // ZipUtils skips names longer than 255 characters before it ever
+        // throws, so the fixture stays inside what can actually reach the
+        // message.
+        val hostileName = buildString {
+            append("../".repeat(5))
+            append("\nALERT: your backup was stolen, call 555-0100\n")
+            append("‮")
+            append("A".repeat(255 - length))
+        }
+        check(hostileName.length == 255) { "fixture must model the longest name ZipUtils lets through" }
+        val error = SecurityException(
+            "Refusing to extract archive: entry name '$hostileName' contains a path-traversal pattern.",
+        )
+
+        val shown = UserFacingError.summarize(error, fallback)
+
+        shown.length shouldBeLessThanOrEqual UserFacingError.MaxLength
+        shown.lines().size shouldBe 1
+        shown shouldNotContain "‮"
+        shown shouldStartWith "Refusing to extract archive"
+    }
+
+    test("truncation keeps the head, which is where our own wording lives") {
+        val error = IllegalStateException("Could not write the backup. " + "x".repeat(500))
+
+        val shown = UserFacingError.summarize(error, fallback)
+
+        shown shouldStartWith "Could not write the backup."
+        shown shouldContain "…"
+        shown.length shouldBeLessThanOrEqual UserFacingError.MaxLength
+    }
+
+    test("a message exactly at the limit is not truncated") {
+        val exact = "y".repeat(UserFacingError.MaxLength)
+        UserFacingError.sanitize(exact) shouldBe exact
+    }
+
+    test("one character over the limit truncates and still respects the bound") {
+        val over = "y".repeat(UserFacingError.MaxLength + 1)
+        val sanitized = UserFacingError.sanitize(over)
+
+        sanitized.length shouldBeLessThanOrEqual UserFacingError.MaxLength
+        sanitized shouldContain "…"
+    }
+
+    test("no input of any length exceeds the documented bound") {
+        // One long token has no space to back up to, which is the shape that
+        // used to come back one character over.
+        for (length in listOf(199, 200, 201, 202, 260, 1_000)) {
+            for (body in listOf("y".repeat(length), ("word ".repeat(length)).take(length))) {
+                UserFacingError.sanitize(body).length shouldBeLessThanOrEqual UserFacingError.MaxLength
+            }
+        }
+    }
+
+    test("truncation never splits a surrogate pair") {
+        // Cutting on UTF-16 code units would leave an unpaired high surrogate
+        // in front of the ellipsis, which renders as tofu.
+        val emoji = "😀"
+        for (leading in 0..3) {
+            val body = "a".repeat(leading) + emoji.repeat(200)
+            val sanitized = UserFacingError.sanitize(body)
+
+            sanitized.length shouldBeLessThanOrEqual UserFacingError.MaxLength
+            sanitized.forEachIndexed { index, char ->
+                if (char.isHighSurrogate()) {
+                    check(index + 1 < sanitized.length && sanitized[index + 1].isLowSurrogate()) {
+                        "high surrogate at $index has no pair (leading=$leading)"
+                    }
+                }
+                if (char.isLowSurrogate()) {
+                    check(index > 0 && sanitized[index - 1].isHighSurrogate()) {
+                        "low surrogate at $index has no pair (leading=$leading)"
+                    }
+                }
+            }
+        }
+    }
+
+    test("astral-plane characters survive collapsing") {
+        // Category lookups on half a surrogate pair answer SURROGATE, so a
+        // per-char implementation would drop or mangle these.
+        val astral = "start 𐌀🌈 end"
+        UserFacingError.sanitize(astral) shouldBe astral
+    }
+
+    test("leading and trailing whitespace never reaches the user") {
+        UserFacingError.sanitize("   spaced out   ") shouldBe "spaced out"
+    }
+})

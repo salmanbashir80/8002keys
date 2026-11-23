@@ -1,0 +1,1 @@
+Privacy-first Android keyboard. Apache-2.0. No INTERNET. No accounts.

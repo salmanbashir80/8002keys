@@ -1,0 +1,298 @@
+/*
+ * Copyright (C) 2021-2025 The FlorisBoard Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.patrickgold.florisboard.app.settings.about
+
+import android.content.Intent
+import android.widget.Toast
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.NewReleases
+import androidx.compose.material.icons.outlined.Policy
+import androidx.compose.material.icons.outlined.VerifiedUser
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import dev.patrickgold.florisboard.BuildConfig
+import dev.patrickgold.florisboard.R
+import dev.patrickgold.florisboard.app.LocalNavController
+import dev.patrickgold.florisboard.app.Routes
+import dev.patrickgold.florisboard.clipboardManager
+import androidx.core.net.toUri
+import dev.patrickgold.florisboard.lib.crashutility.CrashReportEnvironment
+import dev.patrickgold.florisboard.lib.crashutility.CrashReportFormatter
+import dev.patrickgold.florisboard.lib.compose.FlorisScreen
+import dev.patrickgold.florisboard.lib.util.copyWithFeedback
+import dev.patrickgold.florisboard.lib.util.launchUrl
+import dev.patrickgold.florisboard.app.settings.search.Preference
+import org.florisboard.lib.android.stringRes
+import org.florisboard.lib.compose.FlorisCanvasIcon
+import org.florisboard.lib.compose.stringRes
+import dev.patrickgold.florisboard.lib.util.summarizeForUser
+
+@Composable
+fun AboutScreen() = FlorisScreen {
+    title = stringRes(R.string.about__title)
+
+    val navController = LocalNavController.current
+    val context = LocalContext.current
+    val detailsUnavailable = stringRes(R.string.error__details_unavailable)
+    val clipboardManager by context.clipboardManager()
+
+    val appVersion = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
+
+    content {
+        Column(
+            verticalArrangement = Arrangement.Top,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 24.dp, bottom = 32.dp)
+        ) {
+            FlorisCanvasIcon(
+                modifier = Modifier.requiredSize(64.dp),
+                iconId = R.mipmap.ic_launcher,
+                contentDescription = stringRes(R.string.about__app_icon_content_description),
+            )
+            Text(
+                text = stringRes(R.string.app_name),
+                fontSize = 24.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+        }
+        Preference(
+            icon = Icons.Outlined.Info,
+            title = stringRes(R.string.about__version__title),
+            summary = appVersion,
+            onClick = {
+                copyWithFeedback(
+                    context = context,
+                    text = appVersion,
+                    copied = R.string.about__version_copied__title,
+                    failed = { error ->
+                        context.stringRes(
+                            R.string.about__version_copied__error,
+                            "error_message" to error.summarizeForUser(detailsUnavailable),
+                        )
+                    },
+                ) { clipboardManager.addNewPlaintext(it) }
+            },
+        )
+
+        // The only in-app route to the issue tracker used to be an actual crash: the build type,
+        // commit hash, install source, device and Android version the issue templates ask for were
+        // assembled inside the crash dialog and nowhere else. A user reporting a bug that does not
+        // crash had to find all of it by hand. This copies the same block and opens the tracker.
+        val reportCopyFailed = stringRes(R.string.about__report_problem__copy_failed)
+        Preference(
+            icon = Icons.Outlined.BugReport,
+            title = stringRes(R.string.about__report_problem__title),
+            summary = stringRes(R.string.about__report_problem__summary),
+            onClick = {
+                val report = CrashReportFormatter.formatProblemReport(
+                    CrashReportEnvironment.current(
+                        context = context,
+                        versionNameMarkdown = context.stringRes(
+                            R.string.florisboard__changelog_url,
+                            "version" to BuildConfig.VERSION_NAME,
+                        ).let { url -> "[${BuildConfig.VERSION_NAME}]($url)" },
+                    ),
+                )
+                copyWithFeedback(
+                    context = context,
+                    text = report,
+                    copied = R.string.about__report_problem__copied,
+                    failed = { reportCopyFailed },
+                    duration = Toast.LENGTH_LONG,
+                ) { clipboardManager.addNewPlaintext(it) }
+                runCatching {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, context.stringRes(R.string.florisboard__bug_report_url).toUri()),
+                    )
+                }
+            },
+        )
+
+        // ROADMAP §6 N7.5 — APK signing fingerprint pin. Users can compare this
+        // SHA-256 against the value published in the README to detect supply-chain
+        // tampering (a third party rebuilds + signs a modified APK with a different
+        // key). Computed off the main thread because PackageManager I/O can block.
+        var signingFingerprint by remember { mutableStateOf<String?>(null) }
+        var signingFingerprintReady by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            signingFingerprint = withContext(Dispatchers.IO) { SigningFingerprint.sha256(context) }
+            signingFingerprintReady = true
+        }
+        val fingerprintCopyFailed = stringRes(R.string.about__signing_fingerprint__copy_failed)
+        Preference(
+            icon = Icons.Outlined.VerifiedUser,
+            title = stringRes(R.string.about__signing_fingerprint__title),
+            summary = when {
+                !signingFingerprintReady -> stringRes(R.string.about__signing_fingerprint__summary_loading)
+                signingFingerprint != null -> signingFingerprint!!
+                else -> stringRes(R.string.about__signing_fingerprint__summary_unavailable)
+            },
+            onClick = {
+                val fp = signingFingerprint ?: return@Preference
+                copyWithFeedback(
+                    context = context,
+                    text = fp,
+                    copied = R.string.about__signing_fingerprint__copied,
+                    failed = { fingerprintCopyFailed },
+                ) { clipboardManager.addNewPlaintext(it) }
+            },
+        )
+        // What's-new feature contract F14 — inline, offline excerpt sourced
+        // at compile time from the tracked fastlane changelog for this versionCode
+        // (BuildConfig.WHATS_NEW). Hidden when no source matched at build time
+        // (e.g. a dev build between releases).
+        val whatsNew = BuildConfig.WHATS_NEW
+        if (whatsNew.isNotBlank()) {
+            var showWhatsNew by remember { mutableStateOf(false) }
+            Preference(
+                icon = Icons.Outlined.NewReleases,
+                title = stringRes(R.string.about__whats_new__title),
+                summary = stringRes(R.string.about__whats_new__summary, "version" to BuildConfig.VERSION_NAME),
+                onClick = { showWhatsNew = true },
+            )
+            if (showWhatsNew) {
+                AlertDialog(
+                    onDismissRequest = { showWhatsNew = false },
+                    title = {
+                        Text(stringRes(R.string.about__whats_new__dialog_title, "version" to BuildConfig.VERSION_NAME))
+                    },
+                    text = {
+                        Column(modifier = Modifier.verticalScroll(rememberScrollState()).heightIn(max = 420.dp)) {
+                            Text(whatsNew)
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showWhatsNew = false
+                            context.launchUrl(R.string.florisboard__changelog_url, "version" to BuildConfig.VERSION_NAME)
+                        }) {
+                            Text(stringRes(R.string.about__whats_new__full_changelog))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showWhatsNew = false }) {
+                            Text(stringRes(R.string.action__close))
+                        }
+                    },
+                )
+            }
+        }
+        val releaseHistory = BuildConfig.RELEASE_HISTORY
+        if (releaseHistory.isNotBlank()) {
+            var showReleaseHistory by remember { mutableStateOf(false) }
+            Preference(
+                icon = Icons.Default.History,
+                title = stringRes(R.string.about__release_history__title),
+                summary = stringRes(R.string.about__release_history__summary),
+                onClick = { showReleaseHistory = true },
+            )
+            if (showReleaseHistory) {
+                AlertDialog(
+                    onDismissRequest = { showReleaseHistory = false },
+                    title = {
+                        Text(stringRes(R.string.about__release_history__title))
+                    },
+                    text = {
+                        Column(modifier = Modifier.verticalScroll(rememberScrollState()).heightIn(max = 420.dp)) {
+                            Text(releaseHistory)
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showReleaseHistory = false
+                            context.launchUrl(R.string.florisboard__changelog_url, "version" to BuildConfig.VERSION_NAME)
+                        }) {
+                            Text(stringRes(R.string.about__whats_new__full_changelog))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showReleaseHistory = false }) {
+                            Text(stringRes(R.string.action__close))
+                        }
+                    },
+                )
+            }
+        }
+        Preference(
+            icon = Icons.Default.History,
+            title = stringRes(R.string.about__changelog__title),
+            summary = stringRes(R.string.about__changelog__summary),
+            onClick = { context.launchUrl(R.string.florisboard__changelog_url, "version" to BuildConfig.VERSION_NAME) },
+        )
+        Preference(
+            icon = Icons.Default.Code,
+            title = stringRes(R.string.about__repository__title),
+            summary = stringRes(R.string.about__repository__summary),
+            onClick = { context.launchUrl(R.string.florisboard__repo_url) },
+        )
+        Preference(
+            icon = Icons.Outlined.Policy,
+            title = stringRes(R.string.about__privacy_policy__title),
+            summary = stringRes(R.string.about__privacy_policy__summary),
+            onClick = { context.launchUrl(R.string.florisboard__privacy_policy_url) },
+        )
+        Preference(
+            icon = Icons.Outlined.Info,
+            title = stringRes(R.string.about__ai_features__title),
+            summary = stringRes(R.string.about__ai_features__summary),
+            onClick = { navController.navigate(Routes.Settings.AiFeatures) },
+        )
+        Preference(
+            icon = Icons.Outlined.Description,
+            title = stringRes(R.string.about__project_license__title),
+            summary = stringRes(R.string.about__project_license__summary, "license_name" to "Apache 2.0"),
+            onClick = { navController.navigate(Routes.Settings.ProjectLicense) },
+        )
+        Preference(
+            icon = Icons.Outlined.Description,
+            title = stringRes(id = R.string.about__third_party_licenses__title),
+            summary = stringRes(id = R.string.about__third_party_licenses__summary),
+            onClick = { navController.navigate(Routes.Settings.ThirdPartyLicenses) },
+        )
+    }
+}

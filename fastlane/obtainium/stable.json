@@ -1,0 +1,7 @@
+{
+  "id": "io.github.sysadmindoc.swiftfloris",
+  "url": "https://github.com/SysAdminDoc/SwiftFloris",
+  "author": "SysAdminDoc",
+  "name": "SwiftFloris",
+  "additionalSettings": "{\"includePrereleases\":false,\"fallbackToOlderReleases\":true,\"trackOnly\":false,\"versionDetection\":true,\"apkFilterRegEx\":\"SwiftFloris-.*-release\\\\.apk\"}"
+}

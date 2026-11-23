@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "sdk": {
+    "min": 26,
+    "target": 36,
+    "compile": 37,
+    "buildTools": "37.0.0"
+  },
+  "baseApp": {
+    "usesPermissions": [
+      "android.permission.POST_NOTIFICATIONS",
+      "android.permission.QUERY_ADVANCED_PROTECTION_MODE",
+      "android.permission.READ_CALENDAR",
+      "android.permission.VIBRATE",
+      "io.github.sysadmindoc.swiftfloris.permission.BIND_MCP"
+    ],
+    "declaredSignaturePermissions": [
+      "io.github.sysadmindoc.swiftfloris.permission.BIND_MCP",
+      "io.github.sysadmindoc.swiftfloris.permission.REGISTER_ADDON"
+    ],
+    "networkPermission": false
+  },
+  "enrollment": {
+    "allowedPermissions": [
+      "android.permission.FOREGROUND_SERVICE",
+      "android.permission.FOREGROUND_SERVICE_SPECIAL_USE",
+      "android.permission.POST_NOTIFICATIONS",
+      "android.permission.QUERY_ADVANCED_PROTECTION_MODE",
+      "android.permission.READ_CALENDAR",
+      "android.permission.RECEIVE_BOOT_COMPLETED",
+      "android.permission.VIBRATE",
+      "android.permission.WAKE_LOCK"
+    ],
+    "signaturePermissionPrefix": "io.github.sysadmindoc.swiftfloris.permission.",
+    "baseManifestPermissions": [
+      "io.github.sysadmindoc.swiftfloris.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+      "io.github.sysadmindoc.swiftfloris.bench.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+    ],
+    "baseManifestPermissionPrefixes": [
+      "io.github.sysadmindoc.swiftfloris.debug."
+    ]
+  },
+  "storage": {
+    "clipboardHistory": "encrypted_or_unknown",
+    "clipboardMedia": "plaintext_app_private_files",
+    "personalDictionary": "sqlcipher_room",
+    "sqlcipherVersion": "4.20.0"
+  },
+  "mcp": {
+    "appRole": "aidl_client",
+    "transport": "local_android_binder",
+    "aidlMethods": [
+      "invoke",
+      "listToolNames"
+    ],
+    "daemonNetworkPermissionsRejected": true
+  },
+  "optionalCapabilities": {
+    "externalVoiceImeHandoff": "shipped",
+    "localVoiceRecognizer": "preview_only",
+    "heuristicSmartCompose": "shipped_opt_in",
+    "modelSmartCompose": "contract_only",
+    "rewriteModel": "contract_only",
+    "translationRuntime": "contract_only",
+    "handwritingRecognizer": "contract_only",
+    "mcpBinderBridge": "shipped"
+  },
+  "accessibility": {
+    "automatedContracts": [
+      "semantic_labels",
+      "theme_contrast",
+      "touch_targets",
+      "visual_regression"
+    ],
+    "manualAssistiveTechnologyReleaseGate": false
+  }
+}

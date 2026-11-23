@@ -1,0 +1,556 @@
+/*
+ * Copyright (C) 2022-2025 The FlorisBoard Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.patrickgold.florisboard.ime.clipboard.provider
+
+import android.content.ClipData
+import android.content.ClipDescription.EXTRA_IS_REMOTE_DEVICE
+import android.content.ClipDescription.EXTRA_IS_SENSITIVE
+import android.content.ContentValues
+import android.content.Context
+import android.database.Cursor
+import android.net.Uri
+import android.os.PersistableBundle
+import android.provider.BaseColumns
+import android.provider.MediaStore.Images.Media
+import android.provider.OpenableColumns
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.database.getStringOrNull
+import androidx.core.net.toUri
+import androidx.room.AutoMigration
+import androidx.room.ColumnInfo
+import androidx.room.Dao
+import androidx.room.Database
+import androidx.room.Delete
+import androidx.room.Entity
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.PrimaryKey
+import androidx.room.Query
+import androidx.room.RenameColumn
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.room.Transaction
+import androidx.room.TypeConverter
+import androidx.room.TypeConverters
+import androidx.room.Update
+import androidx.room.migration.AutoMigrationSpec
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+import dev.patrickgold.florisboard.R
+import dev.patrickgold.florisboard.ime.clipboard.ClipboardTextRetentionPolicy
+import dev.patrickgold.florisboard.lib.devtools.flogError
+import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.Serializable
+import org.florisboard.lib.android.AndroidVersion
+import org.florisboard.lib.android.UriSerializer
+import org.florisboard.lib.android.query
+import org.florisboard.lib.android.stringRes
+import org.florisboard.lib.kotlin.tryOrNull
+
+private const val CLIPBOARD_HISTORY_TABLE = "clipboard_history"
+private const val CLIPBOARD_FILES_TABLE = "clipboard_files"
+
+enum class ItemType(val value: Int) {
+    TEXT(1),
+    IMAGE(2),
+    VIDEO(3);
+
+    companion object {
+        fun fromInt(value : Int) : ItemType {
+            return entries.first { it.value == value }
+        }
+    }
+}
+
+/**
+ * Represents an item on the clipboard.
+ *
+ * If type == ItemType.IMAGE there must be a uri set
+ * if type == ItemType.TEXT there must be a text set
+ */
+@Serializable
+@Entity(tableName = CLIPBOARD_HISTORY_TABLE)
+data class ClipboardItem @OptIn(ExperimentalSerializationApi::class) constructor(
+    @PrimaryKey(autoGenerate = true)
+    @ColumnInfo(name = BaseColumns._ID, index = true)
+    var id: Long = 0,
+    val type: ItemType,
+    val text: String?,
+    @Serializable(with = UriSerializer::class)
+    val uri: Uri?,
+    val creationTimestampMs: Long,
+    val isPinned: Boolean,
+    val mimeTypes: List<String>,
+    @EncodeDefault
+    @ColumnInfo(name = "is_sensitive", defaultValue = "0")
+    val isSensitive: Boolean = false,
+    @EncodeDefault
+    @ColumnInfo(name= "is_remote_device", defaultValue = "0")
+    val isRemoteDevice: Boolean = false,
+) {
+    companion object {
+        /**
+         * So that every item doesn't have to allocate its own array.
+         */
+        private val TEXT_PLAIN = listOf("text/plain")
+        private val MEDIA_PROJECTION = arrayOf(OpenableColumns.DISPLAY_NAME)
+
+        const val FLORIS_CLIP_LABEL = "florisboard/clipboard_item"
+
+        fun text(text: String): ClipboardItem {
+            require(ClipboardTextRetentionPolicy.shouldRetain(text)) {
+                "Clipboard text exceeds the retained-history UTF-8 limit"
+            }
+            return ClipboardItem(
+                type = ItemType.TEXT,
+                text = text,
+                uri = null,
+                creationTimestampMs = System.currentTimeMillis(),
+                isPinned = false,
+                mimeTypes = TEXT_PLAIN,
+                isSensitive = ClipboardSensitiveTextClassifier.isSensitive(text),
+            )
+        }
+
+        internal fun typeOf(data: ClipData): ItemType {
+            val dataItem = data.getItemAt(0)
+            return when {
+                dataItem.uri != null && data.description.hasMimeType("image/*") -> ItemType.IMAGE
+                dataItem.uri != null && data.description.hasMimeType("video/*") -> ItemType.VIDEO
+                else -> ItemType.TEXT
+            }
+        }
+
+        /**
+         * Returns a new ClipboardItem based on a ClipData.
+         *
+         * @param data The ClipData to clone.
+         * @param cloneUri Whether to store the image using [ClipboardMediaProvider].
+         */
+        fun fromClipData(context: Context, data: ClipData, cloneUri: Boolean) : ClipboardItem {
+            val dataItem = data.getItemAt(0)
+            val type = typeOf(data)
+            val rawText = dataItem.text
+            require(type != ItemType.TEXT || ClipboardTextRetentionPolicy.shouldRetain(rawText)) {
+                "Clipboard text exceeds the retained-history UTF-8 limit"
+            }
+
+            val isSensitive = if (AndroidVersion.ATLEAST_API33_T) {
+                data.description?.extras?.getBoolean(EXTRA_IS_SENSITIVE) ?: false
+            } else {
+                false
+            }
+
+            val isRemoteDevice = if (AndroidVersion.ATLEAST_API34_U) {
+                data.description?.extras?.getBoolean(EXTRA_IS_REMOTE_DEVICE) ?: false
+            } else {
+                false
+            }
+
+            val uri = if (type == ItemType.IMAGE || type == ItemType.VIDEO) {
+                if (dataItem.uri.authority == ClipboardMediaProvider.AUTHORITY || !cloneUri) {
+                    dataItem.uri
+                } else {
+                    var displayName = when (type) {
+                        ItemType.IMAGE -> "Image"
+                        ItemType.VIDEO -> "Video"
+                    }
+                    tryOrNull {
+                        context.contentResolver.query(dataItem.uri, MEDIA_PROJECTION)?.use { cursor ->
+                            val displayNameColumn = cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)
+                            if (cursor.moveToNext()) {
+                                cursor.getStringOrNull(displayNameColumn)?.let { displayName = it }
+                            }
+                        }
+                    }
+                    val values = ContentValues(3).apply {
+                        put(OpenableColumns.DISPLAY_NAME, displayName)
+                        put(ClipboardMediaProvider.Columns.MediaUri, dataItem.uri.toString())
+                        put(ClipboardMediaProvider.Columns.MimeTypes, data.description.filterMimeTypes("*/*").joinToString(","))
+                    }
+                    context.contentResolver.insert(when (type) {
+                        ItemType.IMAGE -> ClipboardMediaProvider.IMAGE_CLIPS_URI
+                        ItemType.VIDEO -> ClipboardMediaProvider.VIDEO_CLIPS_URI
+                    }, values).let { insertedUri ->
+                        ClipboardMediaClonePolicy.requireValidInsertedUri(insertedUri)
+                    }
+                }
+            } else { null }
+
+            // Optional media metadata does not get a separate escape hatch:
+            // drop oversized text before copying it into the persistent entity.
+            val text = rawText
+                ?.takeIf(ClipboardTextRetentionPolicy::shouldRetain)
+                ?.toString()
+            val isTextSensitive = if (type == ItemType.TEXT) {
+                ClipboardSensitiveTextClassifier.isSensitive(text)
+            } else {
+                false
+            }
+            val mimeTypes = when (type) {
+                ItemType.TEXT -> TEXT_PLAIN
+                ItemType.IMAGE, ItemType.VIDEO -> {
+                    List(data.description.mimeTypeCount) { data.description.getMimeType(it) }
+                }
+            }
+
+            return ClipboardItem(
+                0,
+                type,
+                text,
+                uri,
+                System.currentTimeMillis(),
+                false,
+                mimeTypes,
+                isSensitive || isTextSensitive,
+                isRemoteDevice,
+            )
+        }
+    }
+
+    @Composable
+    fun displayText(): String {
+        val context = LocalContext.current
+        return displayText(context)
+    }
+
+    fun displayText(context: Context): String {
+        return if (isSensitive) {
+            context.stringRes(R.string.clipboard__sensitive_clip_content)
+        } else {
+            stringRepresentation()
+        }
+    }
+
+    infix fun isEqualTo(other: ClipData?): Boolean {
+        if (other == null) return false
+        return when (type) {
+            ItemType.TEXT -> text == other.getItemAt(0).text
+            ItemType.IMAGE, ItemType.VIDEO -> uri == other.getItemAt(0).uri
+        }
+    }
+
+    /**
+     * Creates a new ClipData which has the same contents as this.
+     */
+    fun toClipData(context: Context): ClipData {
+        val clipData = when (type) {
+            ItemType.TEXT -> {
+                ClipData.newPlainText(FLORIS_CLIP_LABEL, text)
+            }
+            ItemType.IMAGE, ItemType.VIDEO -> {
+                ClipData.newUri(context.contentResolver, FLORIS_CLIP_LABEL, uri)
+            }
+        }
+        if (isSensitive && AndroidVersion.ATLEAST_API33_T) {
+            clipData.description.extras = PersistableBundle().apply {
+                putBoolean(EXTRA_IS_SENSITIVE, true)
+            }
+        }
+        return clipData
+    }
+
+    /**
+     * Instructs the content provider to delete this URI. Covers both image AND
+     * video media items so a clear-history-all sequence reclaims the on-disk
+     * file AND revokes any outstanding `grantUriPermission` issued through the
+     * provider. The prior implementation only matched `ItemType.IMAGE`, leaving
+     * video files (committed via the v1.8.77 sticker-grade rich-content path
+     * and the system video clipboard) orphaned in `clipboardFilesDir` AND
+     * keeping per-receiver Uri grants live until receiver-process death — a
+     * storage leak AND a privacy leak in one. Text items remain a no-op
+     * because they have no provider-backed URI.
+     */
+    fun close(context: Context) {
+        deleteMedia(context)
+    }
+
+    /**
+     * Deletes this item's media like [close] and returns true once nothing the keyboard stored for
+     * it is left: always for text, and for media in the keyboard's own provider only when the
+     * provider confirms the file and its metadata row are gone. A URI from another app is still
+     * asked to delete, as before, but nothing of ours sits behind it.
+     */
+    fun deleteMedia(context: Context): Boolean {
+        if (type != ItemType.IMAGE && type != ItemType.VIDEO) return true
+        val uri = uri ?: return true
+        if (uri.authority != ClipboardMediaProvider.AUTHORITY) {
+            tryOrNull { context.contentResolver.delete(uri, null, null) }
+            return true
+        }
+        return try {
+            context.contentResolver.delete(uri, null, null) > 0
+        } catch (error: Exception) {
+            flogError { "Failed to delete clipboard media: ${error.javaClass.simpleName}" }
+            false
+        }
+    }
+
+    fun stringRepresentation(): String {
+        return when {
+            text != null -> text
+            uri != null -> "(Image) $uri"
+            else -> "#ERROR"
+        }
+    }
+}
+
+class Converters {
+    @TypeConverter
+    fun uriFromString(value: String?): Uri? {
+        return value?.toUri()
+    }
+
+    @TypeConverter
+    fun stringFromUri(value: Uri?): String? {
+        return value?.toString()
+    }
+
+    @TypeConverter
+    fun itemTypeToInt(value: ItemType?): Int? {
+        return value?.value
+    }
+
+    @TypeConverter
+    fun intToItemType(value: Int?): ItemType? {
+        return value?.let { ItemType.fromInt(it) }
+    }
+
+    /**
+     * Only works because the string array is a mimetype.
+     * DOES NOT USE A GENERALIZED FORMAT.
+     */
+    @TypeConverter
+    fun mimeTypesToString(mimeTypes: List<String>): String {
+        return mimeTypes.joinToString(",")
+    }
+
+    @TypeConverter
+    fun stringToMimeTypes(value: String): List<String> {
+        return value.split(",")
+    }
+}
+
+@Dao
+interface ClipboardHistoryDao {
+    @Query("SELECT * FROM $CLIPBOARD_HISTORY_TABLE")
+    fun getAll(): List<ClipboardItem>
+
+    @Query("SELECT * FROM $CLIPBOARD_HISTORY_TABLE")
+    fun getAllAsFlow(): Flow<List<ClipboardItem>>
+
+    @Insert
+    fun insert(item: ClipboardItem): Long
+
+    @Update
+    fun update(item: ClipboardItem)
+
+    @Update
+    fun update(items: List<ClipboardItem>)
+
+    @Query("SELECT * FROM $CLIPBOARD_HISTORY_TABLE WHERE ${BaseColumns._ID} = :id")
+    fun getById(id: Long): ClipboardItem?
+
+    @Query("DELETE FROM $CLIPBOARD_HISTORY_TABLE WHERE ${BaseColumns._ID} = :id")
+    fun delete(id: Long): Int
+
+    @Query("DELETE FROM $CLIPBOARD_HISTORY_TABLE WHERE ${BaseColumns._ID} = :id AND not isPinned ")
+    fun deleteIfUnpinned(id: Long): Int
+
+    @Delete
+    fun delete(items: List<ClipboardItem>)
+
+    @Query("DELETE FROM $CLIPBOARD_HISTORY_TABLE")
+    fun deleteAll()
+
+    @Query("DELETE FROM $CLIPBOARD_HISTORY_TABLE WHERE type = :type")
+    fun deleteAllFromType(type: ItemType)
+
+    @Query("DELETE FROM $CLIPBOARD_HISTORY_TABLE WHERE NOT isPinned")
+    fun deleteAllUnpinned()
+
+    @Transaction
+    fun replaceAllForRestore(items: List<ClipboardItem>) {
+        deleteAll()
+        items.forEach(::insert)
+    }
+
+    @Transaction
+    fun deleteAndInsert(deleteId: Long, newItem: ClipboardItem): Long {
+        delete(deleteId)
+        return insert(newItem)
+    }
+}
+
+@Database(
+    entities = [ClipboardItem::class],
+    version = 4,
+    autoMigrations = [
+        AutoMigration(from = 2, to = 4),
+        AutoMigration(from = 3, to = 4, spec = ClipboardHistoryDatabase.MIGRATE_3_TO_4::class),
+    ],
+)
+@TypeConverters(Converters::class)
+abstract class ClipboardHistoryDatabase : RoomDatabase() {
+    abstract fun clipboardItemDao(): ClipboardHistoryDao
+
+    @RenameColumn(
+        tableName = CLIPBOARD_HISTORY_TABLE,
+        fromColumnName = "isSensitive",
+        toColumnName = "is_sensitive",
+    )
+    @RenameColumn(
+        tableName = CLIPBOARD_HISTORY_TABLE,
+        fromColumnName = "isRemoteDevice",
+        toColumnName = "is_remote_device",
+    )
+    class MIGRATE_3_TO_4 : AutoMigrationSpec
+
+    companion object {
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `$CLIPBOARD_HISTORY_TABLE`")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `$CLIPBOARD_HISTORY_TABLE` (" +
+                        "`_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`type` INTEGER NOT NULL, " +
+                        "`text` TEXT, " +
+                        "`uri` TEXT, " +
+                        "`creationTimestampMs` INTEGER NOT NULL, " +
+                        "`isPinned` INTEGER NOT NULL, " +
+                        "`mimeTypes` TEXT NOT NULL)"
+                )
+            }
+        }
+
+        /** Room file name; the table and the database file happen to share a name. */
+        const val DB_FILE_NAME = CLIPBOARD_HISTORY_TABLE
+
+        /**
+         * Opens the history in the plaintext Room database. Only used to read a pre-encryption
+         * store during migration, and as the fallback when SQLCipher cannot load.
+         */
+        fun new(context: Context): ClipboardHistoryDatabase {
+            return Room
+                .databaseBuilder(
+                    context, ClipboardHistoryDatabase::class.java, DB_FILE_NAME,
+                )
+                .addMigrations(MIGRATION_1_2)
+                .build()
+        }
+
+        /**
+         * Opens the history through SQLCipher. Callers should prefer
+         * [dev.patrickgold.florisboard.ime.clipboard.provider.ClipboardHistoryStore.open], which
+         * also handles migration and the unreadable-store recovery path.
+         */
+        fun newEncrypted(context: Context): ClipboardHistoryDatabase {
+            val factory = ClipboardHistoryEncryption.openHelperFactory(context)
+                ?: return new(context)
+            return Room
+                .databaseBuilder(
+                    context, ClipboardHistoryDatabase::class.java, DB_FILE_NAME,
+                )
+                .addMigrations(MIGRATION_1_2)
+                .openHelperFactory(factory)
+                .build()
+        }
+    }
+}
+
+@Serializable
+@Entity(tableName = CLIPBOARD_FILES_TABLE)
+data class ClipboardFileInfo(
+    @PrimaryKey @ColumnInfo(name=BaseColumns._ID, index=true) val id: Long,
+    @ColumnInfo(name=OpenableColumns.DISPLAY_NAME) val displayName: String,
+    @ColumnInfo(name=OpenableColumns.SIZE) val size: Long,
+    @ColumnInfo(name=Media.ORIENTATION) val orientation: Int,
+    val mimeTypes: List<String>,
+)
+
+@Dao
+interface ClipboardFilesDao {
+    @Query("SELECT * FROM $CLIPBOARD_FILES_TABLE WHERE ${BaseColumns._ID} == (:uid)")
+    fun getById(uid: Long) : ClipboardFileInfo?
+
+    @Query("SELECT * FROM $CLIPBOARD_FILES_TABLE WHERE ${BaseColumns._ID} == (:uid)")
+    fun getCursorById(uid: Long) : Cursor
+
+    // Returns a single-column cursor over the EXIF orientation for the
+    // row. A column name cannot be supplied as a bind parameter — Room
+    // binds `:param` as a *value*, so the old `SELECT (:projection)`
+    // returned a one-row cursor whose only cell was the literal string
+    // "orientation", never the ORIENTATION column. The provider's only
+    // projection consumer (MediaStore.Images.Media.ORIENTATION) is served
+    // by selecting the column directly and aliasing it back to the
+    // requested projection name so the cursor's column name matches what
+    // the caller asked for.
+    @Query(
+        "SELECT `${Media.ORIENTATION}` AS `${Media.ORIENTATION}` " +
+            "FROM $CLIPBOARD_FILES_TABLE WHERE ${BaseColumns._ID} == (:uid)",
+    )
+    fun getOrientationCursorById(uid: Long) : Cursor
+
+    @Query("DELETE FROM $CLIPBOARD_FILES_TABLE WHERE ${BaseColumns._ID} == (:id)")
+    fun delete(id: Long)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insert(vararg clipboardFileInfos: ClipboardFileInfo)
+
+    @Query("SELECT * FROM $CLIPBOARD_FILES_TABLE")
+    fun getAll(): List<ClipboardFileInfo>
+
+    @Query("DELETE FROM $CLIPBOARD_FILES_TABLE")
+    fun deleteAll()
+
+    @Transaction
+    fun replaceAllForRestore(clipboardFileInfos: List<ClipboardFileInfo>) {
+        deleteAll()
+        if (clipboardFileInfos.isNotEmpty()) {
+            insert(*clipboardFileInfos.toTypedArray())
+        }
+    }
+}
+
+@Database(entities = [ClipboardFileInfo::class], version = 2)
+@TypeConverters(Converters::class)
+abstract class ClipboardFilesDatabase : RoomDatabase() {
+    abstract fun clipboardFilesDao() : ClipboardFilesDao
+
+    companion object {
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `$CLIPBOARD_FILES_TABLE` " +
+                        "ADD COLUMN `orientation` INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
+        fun new(context: Context): ClipboardFilesDatabase {
+            return Room
+                .databaseBuilder(
+                    context, ClipboardFilesDatabase::class.java, CLIPBOARD_FILES_TABLE,
+                )
+                .addMigrations(MIGRATION_1_2)
+                .build()
+        }
+    }
+}

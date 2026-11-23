@@ -1,0 +1,139 @@
+{
+  "$": "ime.extension.theme",
+  "meta": {
+    "id": "org.florisboard.themes",
+    "version": "0.4.0",
+    "title": "FlorisBoard default themes",
+    "description": "Default themes (both day and night) for the keyboard UI",
+    "maintainers": [ "patrickgold <patrick@patrickgold.dev>", "lm41 <lm41@lm41.xyz>" ],
+    "license": "apache-2.0"
+  },
+  "themes": [
+    {
+      "id": "floris_day",
+      "label": "Floris Day",
+      "authors": [ "patrickgold" ],
+      "isNight": false
+    },
+    {
+      "id": "floris_day_borderless",
+      "label": "Floris Day (Borderless)",
+      "authors": [ "patrickgold" ],
+      "isNight": false
+    },
+    {
+      "id": "swift_glacier",
+      "label": "Swift Glacier",
+      "authors": [ "SwiftFloris" ],
+      "isNight": false
+    },
+    {
+      "id": "swift_glacier_borderless",
+      "label": "Swift Glacier (Borderless)",
+      "authors": [ "SwiftFloris" ],
+      "isNight": false
+    },
+    {
+      "id": "swiftkey_pure_light",
+      "label": "SwiftKey Pure (Light)",
+      "authors": [ "SwiftFloris" ],
+      "isNight": false
+    },
+    {
+      "id": "floris_night",
+      "label": "Floris Night",
+      "authors": [ "patrickgold" ],
+      "isNight": true
+    },
+    {
+      "id": "floris_night_borderless",
+      "label": "Floris Night (Borderless)",
+      "authors": [ "patrickgold" ],
+      "isNight": true
+    },
+    {
+      "id": "swift_slate",
+      "label": "Swift Slate",
+      "authors": [ "SwiftFloris" ],
+      "isNight": true
+    },
+    {
+      "id": "swift_slate_borderless",
+      "label": "Swift Slate (Borderless)",
+      "authors": [ "SwiftFloris" ],
+      "isNight": true
+    },
+    {
+      "id": "swiftkey_pure_dark",
+      "label": "SwiftKey Pure (Dark)",
+      "authors": [ "SwiftFloris" ],
+      "isNight": true
+    },
+    {
+      "id": "swiftkey_high_contrast",
+      "label": "SwiftKey High Contrast (AAA)",
+      "authors": [ "SwiftFloris" ],
+      "isNight": true
+    },
+    {
+      "id": "aurora_animated",
+      "label": "Aurora Animated",
+      "authors": [ "SwiftFloris" ],
+      "isNight": true
+    },
+    {
+      "id": "floris_pure_night",
+      "label": "Floris Pure Night",
+      "authors": [ "serebit" ],
+      "isNight": true
+    },
+    {
+      "id": "floris_pure_night_borderless",
+      "label": "Floris Pure Night (Borderless)",
+      "authors": [ "serebit" ],
+      "isNight": true
+    },
+    {
+      "id": "m3e_nord_light",
+      "label": "Nord (M3 Expressive)",
+      "authors": [ "SwiftFloris" ],
+      "isNight": false
+    },
+    {
+      "id": "m3e_swiftkey_pure_light",
+      "label": "SwiftKey Pure (M3 Expressive, Light)",
+      "authors": [ "SwiftFloris" ],
+      "isNight": false
+    },
+    {
+      "id": "m3e_nord_dark",
+      "label": "Nord (M3 Expressive, Dark)",
+      "authors": [ "SwiftFloris" ],
+      "isNight": true
+    },
+    {
+      "id": "m3e_tokyo_night",
+      "label": "Tokyo Night (M3 Expressive)",
+      "authors": [ "SwiftFloris" ],
+      "isNight": true
+    },
+    {
+      "id": "m3e_dracula",
+      "label": "Dracula (M3 Expressive)",
+      "authors": [ "SwiftFloris" ],
+      "isNight": true
+    },
+    {
+      "id": "m3e_catppuccin_mocha",
+      "label": "Catppuccin Mocha (M3 Expressive)",
+      "authors": [ "SwiftFloris" ],
+      "isNight": true
+    },
+    {
+      "id": "m3e_swiftkey_pure_dark",
+      "label": "SwiftKey Pure (M3 Expressive, Dark)",
+      "authors": [ "SwiftFloris" ],
+      "isNight": true
+    }
+  ]
+}

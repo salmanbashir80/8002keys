@@ -1,0 +1,626 @@
+/*
+ * Copyright (C) 2021-2025 The FlorisBoard Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.patrickgold.florisboard.app.settings.localization
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialogDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ShapeDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Observer
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import dev.patrickgold.florisboard.R
+import dev.patrickgold.florisboard.app.FlorisPreferenceStore
+import dev.patrickgold.florisboard.app.LocalNavController
+import dev.patrickgold.florisboard.app.Routes
+import dev.patrickgold.florisboard.ime.core.BilingualSubtypePresets
+import dev.patrickgold.florisboard.ime.core.DisplayLanguageNamesIn
+import dev.patrickgold.florisboard.ime.core.Subtype
+import dev.patrickgold.florisboard.ime.core.SubtypeJsonConfig
+import dev.patrickgold.florisboard.ime.core.SubtypeLayoutMap
+import dev.patrickgold.florisboard.ime.core.SubtypeNlpProviderMap
+import dev.patrickgold.florisboard.ime.core.SubtypePreset
+import dev.patrickgold.florisboard.ime.keyboard.LayoutArrangementComponent
+import dev.patrickgold.florisboard.ime.keyboard.LayoutType
+import dev.patrickgold.florisboard.ime.keyboard.extCorePopupMapping
+import dev.patrickgold.florisboard.keyboardManager
+import dev.patrickgold.florisboard.lib.FlorisLocale
+import dev.patrickgold.florisboard.lib.compose.FlorisScreen
+import dev.patrickgold.florisboard.lib.ext.ExtensionComponentName
+import dev.patrickgold.florisboard.subtypeManager
+import dev.patrickgold.jetpref.datastore.model.collectAsState
+import dev.patrickgold.jetpref.material.ui.JetPrefAlertDialog
+import dev.patrickgold.jetpref.material.ui.JetPrefDropdown
+import dev.patrickgold.jetpref.material.ui.JetPrefDropdownMenuDefaults
+import dev.patrickgold.florisboard.app.settings.search.SettingsListItem
+import org.florisboard.lib.compose.FlorisButtonBar
+import org.florisboard.lib.compose.FlorisDropdownLikeButton
+import org.florisboard.lib.compose.FlorisSpacing
+import org.florisboard.lib.compose.florisScrollbar
+import org.florisboard.lib.compose.stringRes
+
+
+private class SubtypeEditorState private constructor(init: SubtypeEditorDraft) {
+    companion object {
+        val Saver = Saver<SubtypeEditorState, String>(
+            save = { editor ->
+                SubtypeJsonConfig.encodeToString(editor.toDraft())
+            },
+            restore = { str ->
+                val draft = SubtypeJsonConfig.decodeFromString<SubtypeEditorDraft>(str)
+                SubtypeEditorState(draft)
+            },
+        )
+    }
+
+    constructor(init: Subtype?) : this(SubtypeEditorValidationPolicy.draftFrom(init))
+
+    val id: MutableState<Long> = mutableLongStateOf(init.id)
+    val primaryLocale: MutableState<FlorisLocale> = mutableStateOf(init.primaryLocale)
+    val secondaryLocales: MutableState<List<FlorisLocale>> = mutableStateOf(init.secondaryLocales)
+    val nlpProviders: MutableState<SubtypeNlpProviderMap> = mutableStateOf(init.nlpProviders)
+    val composer: MutableState<ExtensionComponentName> = mutableStateOf(init.composer)
+    val currencySet: MutableState<ExtensionComponentName> = mutableStateOf(init.currencySet)
+    val punctuationRule: MutableState<ExtensionComponentName> = mutableStateOf(init.punctuationRule)
+    val popupMapping: MutableState<ExtensionComponentName> = mutableStateOf(init.popupMapping)
+    val layoutMap: MutableState<SubtypeLayoutMap> = mutableStateOf(init.layoutMap)
+
+    fun applySubtype(subtype: Subtype) {
+        id.value = subtype.id
+        primaryLocale.value = subtype.primaryLocale
+        secondaryLocales.value = subtype.secondaryLocales
+        composer.value = subtype.composer
+        nlpProviders.value = subtype.nlpProviders
+        currencySet.value = subtype.currencySet
+        punctuationRule.value = subtype.punctuationRule
+        popupMapping.value = subtype.popupMapping
+        layoutMap.value = subtype.layoutMap
+    }
+
+    fun toDraft() = SubtypeEditorDraft(
+        id = id.value,
+        primaryLocale = primaryLocale.value,
+        secondaryLocales = secondaryLocales.value,
+        nlpProviders = nlpProviders.value,
+        composer = composer.value,
+        currencySet = currencySet.value,
+        punctuationRule = punctuationRule.value,
+        popupMapping = popupMapping.value,
+        layoutMap = layoutMap.value,
+    )
+
+    fun toSubtype(): Result<Subtype> {
+        return SubtypeEditorValidationPolicy.toSubtype(toDraft())
+    }
+}
+
+@Composable
+fun SubtypeEditorScreen(id: Long?) = FlorisScreen {
+    title = stringRes(if (id == null) {
+        R.string.settings__localization__subtype_add_title
+    } else {
+        R.string.settings__localization__subtype_edit_title
+    })
+
+    val selectValue = stringRes(R.string.settings__localization__subtype_select_placeholder)
+    val selectListValues = remember(selectValue) { listOf(selectValue) }
+    val bilingualSummary = stringRes(R.string.settings__localization__subtype_bilingual_summary)
+
+    val prefs by FlorisPreferenceStore
+    val navController = LocalNavController.current
+    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val keyboardManager by context.keyboardManager()
+    val subtypeManager by context.subtypeManager()
+
+    val displayLanguageNamesIn by prefs.localization.displayLanguageNamesIn.collectAsState()
+    val composers by keyboardManager.resources.composers.collectAsState()
+    val currencySets by keyboardManager.resources.currencySets.collectAsState()
+    val layoutExtensions by keyboardManager.resources.layouts.collectAsState()
+    val popupMappings by keyboardManager.resources.popupMappings.collectAsState()
+    val subtypePresets by keyboardManager.resources.subtypePresets.collectAsState()
+    val bilingualSubtypePresets = remember(subtypePresets) {
+        BilingualSubtypePresets.canonicalFrom(subtypePresets)
+    }
+    val allSubtypePresets = remember(subtypePresets, bilingualSubtypePresets) {
+        bilingualSubtypePresets + subtypePresets
+    }
+
+    val subtypeEditor = rememberSaveable(saver = SubtypeEditorState.Saver) {
+        val subtype = id?.let { subtypeManager.getSubtypeById(id) }
+        SubtypeEditorState(subtype)
+    }
+    var primaryLocale by subtypeEditor.primaryLocale
+    var secondaryLocales by subtypeEditor.secondaryLocales
+    var composer by subtypeEditor.composer
+    var currencySet by subtypeEditor.currencySet
+    var popupMapping by subtypeEditor.popupMapping
+    var layoutMap by subtypeEditor.layoutMap
+    var nlpProviders by subtypeEditor.nlpProviders
+
+    var showSubtypePresetsDialog by rememberSaveable { mutableStateOf(id == null) }
+    var showSelectAsError by rememberSaveable { mutableStateOf(false) }
+    var errorDialogStrId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var subtypeToDelete: Subtype? by rememberSaveable(saver = SubtypeSaver) { mutableStateOf(null) }
+
+    val selectLocaleScreenResult = navController.currentBackStackEntry
+        ?.savedStateHandle
+        ?.getLiveData<String>(SelectLocaleScreenResultLanguageTag)
+    DisposableEffect(selectLocaleScreenResult, lifecycleOwner) {
+        val observer = Observer<String> { languageTag ->
+            val locale = FlorisLocale.fromTag(languageTag)
+            primaryLocale = locale
+            secondaryLocales = emptyList()
+            val preset = subtypeManager.getSubtypePresetForLocale(locale)
+            popupMapping = preset?.popupMapping ?: extCorePopupMapping("default")
+        }
+        selectLocaleScreenResult?.observe(lifecycleOwner, observer)
+        onDispose { selectLocaleScreenResult?.removeObserver(observer) }
+    }
+
+
+    @Composable
+    fun SubtypePropertyDropdown(
+        title: String,
+        layoutType: LayoutType,
+    ) {
+        SubtypeProperty(title) {
+            SubtypeLayoutDropdown(
+                layoutType = layoutType,
+                layouts = layoutExtensions[layoutType] ?: mapOf(),
+                showSelectAsError = showSelectAsError,
+                layoutMap = layoutMap,
+                onLayoutMapChanged = { layoutMap = it },
+                selectListValues = selectListValues,
+            )
+        }
+    }
+
+    actions {
+        if (id != null) {
+            IconButton(onClick = {
+                subtypeToDelete = subtypeManager.getSubtypeById(id)
+            }) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = stringRes(
+                        R.string.settings__localization__subtype_delete_action,
+                    ),
+                )
+            }
+        }
+    }
+
+    bottomBar {
+        FlorisButtonBar {
+            ButtonBarSpacer()
+            ButtonBarTextButton(text = stringRes(R.string.action__cancel)) {
+                navController.popBackStack()
+            }
+            ButtonBarButton(text = stringRes(R.string.action__save)) {
+                subtypeEditor.toSubtype().onSuccess { subtype ->
+                    if (id == null) {
+                        if (!subtypeManager.addSubtype(subtype)) {
+                            errorDialogStrId = R.string.settings__localization__subtype_error_already_exists
+                            return@ButtonBarButton
+                        }
+                    } else {
+                        subtypeManager.modifySubtypeWithSameId(subtype)
+                    }
+                    navController.popBackStack()
+                }.onFailure {
+                    showSelectAsError = true
+                    errorDialogStrId = R.string.settings__localization__subtype_error_fields_no_value
+                }
+            }
+        }
+    }
+
+    content {
+        Column(modifier = Modifier.padding(8.dp)) {
+            if (id == null) {
+                Card(modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                ) {
+                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                        Text(
+                            modifier = Modifier.padding(vertical = 8.dp, horizontal = 16.dp),
+                            text = stringRes(R.string.settings__localization__suggested_subtype_presets),
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        val systemLocales = remember {
+                            val list = mutableListOf<FlorisLocale>()
+                            val localeList = configuration.locales
+                            for (n in 0 until localeList.size()) {
+                                list.add(FlorisLocale.from(localeList.get(n)))
+                            }
+                            list
+                        }
+                        val suggestedPresets = remember(subtypePresets) {
+                            val presets = mutableListOf<SubtypePreset>()
+                            for (systemLocale in systemLocales) {
+                                subtypePresets.find { it.locale == systemLocale }?.let { presets.add(it) }
+                            }
+                            presets
+                        }
+                        if (suggestedPresets.isNotEmpty()) {
+                            for (suggestedPreset in suggestedPresets) {
+                                SettingsListItem(
+                                    modifier = Modifier.clickable(role = Role.Button) {
+                                        subtypeEditor.applySubtype(suggestedPreset.toSubtype())
+                                    },
+                                    text = suggestedPreset.displayName(displayLanguageNamesIn),
+                                    secondaryText = subtypePresetSummary(suggestedPreset, bilingualSummary),
+                                    colors = ListItemDefaults.colors(containerColor = CardDefaults.cardColors().containerColor),
+                                )
+                            }
+                        }
+                        if (bilingualSubtypePresets.isNotEmpty()) {
+                            Text(
+                                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp, start = 16.dp, end = 16.dp),
+                                text = stringRes(R.string.settings__localization__subtype_bilingual_presets),
+                                color = MaterialTheme.colorScheme.secondary,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            for (bilingualPreset in bilingualSubtypePresets) {
+                                SettingsListItem(
+                                    modifier = Modifier.clickable(role = Role.Button) {
+                                        subtypeEditor.applySubtype(bilingualPreset.toSubtype())
+                                    },
+                                    text = bilingualPreset.displayName(displayLanguageNamesIn),
+                                    secondaryText = subtypePresetSummary(bilingualPreset, bilingualSummary),
+                                    colors = ListItemDefaults.colors(containerColor = CardDefaults.cardColors().containerColor),
+                                )
+                            }
+                        }
+                        if (suggestedPresets.isEmpty() && bilingualSubtypePresets.isEmpty()) {
+                            Text(
+                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 16.dp),
+                                text = stringRes(R.string.settings__localization__suggested_subtype_presets_none_found),
+                            )
+                        }
+                        Button(
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp)
+                                .align(Alignment.End),
+                            shape = MaterialTheme.shapes.small,
+                            onClick = { showSubtypePresetsDialog = true },
+                        ) {
+                            Text(
+                                text = stringRes(R.string.settings__localization__subtype_presets_view_all)
+                            )
+                        }
+                    }
+                }
+            }
+
+            SubtypeProperty(stringRes(R.string.settings__localization__subtype_locale)) {
+                FlorisDropdownLikeButton(
+                    item = if (primaryLocale == SelectLocale) selectValue else when (displayLanguageNamesIn) {
+                        DisplayLanguageNamesIn.SYSTEM_LOCALE -> primaryLocale.displayName()
+                        DisplayLanguageNamesIn.NATIVE_LOCALE -> primaryLocale.displayName(primaryLocale)
+                    },
+                    isError = showSelectAsError && primaryLocale == SelectLocale,
+                    errorMessage = stringRes(R.string.settings__localization__subtype_locale_error),
+                    onClick = {
+                        navController.navigate(Routes.Settings.SelectLocale)
+                    },
+                    appearance = JetPrefDropdownMenuDefaults.outlined(shape = ShapeDefaults.Small),
+                )
+            }
+            SubtypeProperty(stringRes(R.string.settings__localization__subtype_secondary_locales)) {
+                Text(
+                    modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp),
+                    text = if (secondaryLocales.isEmpty()) {
+                        stringRes(R.string.settings__localization__subtype_secondary_locales_none)
+                    } else {
+                        secondaryLocales.displayName(displayLanguageNamesIn)
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            SubtypeProperty(stringRes(R.string.settings__localization__subtype_popup_mapping)) {
+                val popupMappingIds = remember(popupMappings) {
+                    SelectListKeys + popupMappings.keys
+                }
+                val popupMappingLabels = remember(popupMappings) {
+                    selectListValues + popupMappings.values.map { it.label }
+                }
+                val expanded = remember { mutableStateOf(false) }
+                val selectedIndex = popupMappingIds.indexOf(popupMapping).coerceAtLeast(0)
+                JetPrefDropdown(
+                    options = popupMappingLabels,
+                    expanded = expanded,
+                    selectedOptionIndex = selectedIndex,
+                    isError = showSelectAsError && selectedIndex == 0,
+                    onSelectOption = { popupMapping = popupMappingIds[it] },
+                    appearance = JetPrefDropdownMenuDefaults.outlined(shape = ShapeDefaults.Small),
+                )
+            }
+            SubtypePropertyDropdown(stringRes(R.string.settings__localization__subtype_characters_layout), LayoutType.CHARACTERS)
+
+            SubtypeGroupSpacer()
+
+            SubtypeProperty(stringRes(R.string.settings__localization__subtype_suggestion_provider)) {
+                val providerOptions = remember(nlpProviders) {
+                    SubtypeNlpProviderOptions.forSavedProviders(nlpProviders.suggestion, nlpProviders.spelling)
+                }
+                val providerLabels = providerOptions.options.map { option ->
+                    when (option) {
+                        SubtypeNlpProviderOption.Placeholder -> selectValue
+                        is SubtypeNlpProviderOption.Provider -> stringRes(option.metadata.labelRes)
+                        is SubtypeNlpProviderOption.Unavailable -> stringRes(
+                            R.string.settings__localization__nlp_provider__unavailable,
+                            "name" to (option.metadata?.let { stringRes(it.labelRes) } ?: option.id),
+                        )
+                    }
+                }
+                val selectedOption = providerOptions.selected
+                val expanded = remember { mutableStateOf(false) }
+                JetPrefDropdown(
+                    options = providerLabels,
+                    expanded = expanded,
+                    selectedOptionIndex = providerOptions.selectedIndex,
+                    isError = selectedOption is SubtypeNlpProviderOption.Unavailable ||
+                        (showSelectAsError && selectedOption == SubtypeNlpProviderOption.Placeholder),
+                    onSelectOption = { index ->
+                        // Picking the unavailable entry again keeps the saved pair as it was.
+                        val option = providerOptions.options[index]
+                        if (option !is SubtypeNlpProviderOption.Unavailable) {
+                            nlpProviders = SubtypeNlpProviderMap(
+                                suggestion = option.id,
+                                spelling = option.id,
+                            )
+                        }
+                    },
+                    appearance = JetPrefDropdownMenuDefaults.outlined(shape = ShapeDefaults.Small),
+                )
+                val providerSummary = when (selectedOption) {
+                    SubtypeNlpProviderOption.Placeholder -> null
+                    is SubtypeNlpProviderOption.Provider -> stringRes(selectedOption.metadata.capabilitySummaryRes)
+                    is SubtypeNlpProviderOption.Unavailable -> stringRes(
+                        R.string.settings__localization__nlp_provider__unavailable_summary,
+                    )
+                }
+                if (providerSummary != null) {
+                    Text(
+                        modifier = Modifier.padding(top = FlorisSpacing.XSmall),
+                        text = providerSummary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            SubtypeGroupSpacer()
+
+            SubtypePropertyDropdown(stringRes(R.string.settings__localization__subtype_symbols_layout), LayoutType.SYMBOLS)
+            SubtypePropertyDropdown(stringRes(R.string.settings__localization__subtype_symbols2_layout), LayoutType.SYMBOLS2)
+
+            SubtypeProperty(stringRes(R.string.settings__localization__subtype_composer)) {
+                val composerIds = remember(composers) {
+                    SelectListKeys + composers.keys
+                }
+                val composerNames = remember(composers) {
+                    selectListValues + composers.values.map { it.label }
+                }
+                val expanded = remember { mutableStateOf(false) }
+                JetPrefDropdown(
+                    options = composerNames,
+                    expanded = expanded,
+                    selectedOptionIndex = composerIds.indexOf(composer).coerceAtLeast(0),
+                    isError = showSelectAsError && composer == SelectComponentName,
+                    onSelectOption = { composer = composerIds[it] },
+                    appearance = JetPrefDropdownMenuDefaults.outlined(shape = ShapeDefaults.Small),
+                )
+            }
+            SubtypeProperty(stringRes(R.string.settings__localization__subtype_currency_set)) {
+                val currencySetIds = remember(currencySets) {
+                    SelectListKeys + currencySets.keys
+                }
+                val currencySetNames = remember(currencySets) {
+                    selectListValues + currencySets.values.map { it.label }
+                }
+                val expanded = remember { mutableStateOf(false) }
+                JetPrefDropdown(
+                    options = currencySetNames,
+                    expanded = expanded,
+                    selectedOptionIndex = currencySetIds.indexOf(currencySet).coerceAtLeast(0),
+                    isError = showSelectAsError && currencySet == SelectComponentName,
+                    onSelectOption = { currencySet = currencySetIds[it] },
+                    appearance = JetPrefDropdownMenuDefaults.outlined(shape = ShapeDefaults.Small),
+                )
+            }
+
+            SubtypeGroupSpacer()
+
+            SubtypePropertyDropdown(stringRes(R.string.settings__localization__subtype_numeric_layout), LayoutType.NUMERIC)
+
+            SubtypePropertyDropdown(stringRes(R.string.settings__localization__subtype_numeric_advanced_layout), LayoutType.NUMERIC_ADVANCED)
+
+            SubtypePropertyDropdown(stringRes(R.string.settings__localization__subtype_numeric_row_layout), LayoutType.NUMERIC_ROW)
+
+            SubtypeGroupSpacer()
+
+            SubtypePropertyDropdown(stringRes(R.string.settings__localization__subtype_phone_layout), LayoutType.PHONE)
+
+            SubtypePropertyDropdown(stringRes(R.string.settings__localization__subtype_phone2_layout), LayoutType.PHONE2)
+        }
+
+        if (showSubtypePresetsDialog) {
+            JetPrefAlertDialog(
+                title = stringRes(R.string.settings__localization__subtype_presets),
+                dismissLabel = stringRes(android.R.string.cancel),
+                scrollModifier = Modifier,
+                contentPadding = PaddingValues(horizontal = 8.dp),
+                onDismiss = {
+                    showSubtypePresetsDialog = false
+                },
+            ) {
+                Column {
+                    HorizontalDivider()
+                    val lazyListState = rememberLazyListState()
+                    LazyColumn(
+                        modifier = Modifier
+                            .florisScrollbar(lazyListState, isVertical = true).weight(1f),
+                        state = lazyListState,
+                    ) {
+                        items(allSubtypePresets) { subtypePreset ->
+                            SettingsListItem(
+                                modifier = Modifier.clickable(role = Role.Button) {
+                                    subtypeEditor.applySubtype(subtypePreset.toSubtype())
+                                    showSubtypePresetsDialog = false
+                                },
+                                text = subtypePreset.displayName(displayLanguageNamesIn),
+                                secondaryText = subtypePresetSummary(subtypePreset, bilingualSummary),
+                                colors = ListItemDefaults.colors(containerColor = AlertDialogDefaults.containerColor),
+                            )
+                        }
+                    }
+                    HorizontalDivider()
+                }
+            }
+        }
+
+        errorDialogStrId?.let { strId ->
+            JetPrefAlertDialog(
+                title = stringRes(R.string.error__title),
+                confirmLabel = stringRes(android.R.string.ok),
+                onConfirm = {
+                    errorDialogStrId = null
+                },
+                onDismiss = {
+                    errorDialogStrId = null
+                },
+            ) {
+                Text(text = stringRes(strId))
+            }
+        }
+    }
+
+    DeleteSubtypeConfirmationDialog(
+        subtypeToDelete = subtypeToDelete,
+        displayLanguageNamesIn = displayLanguageNamesIn,
+        onDismiss = {
+            subtypeToDelete = null
+        },
+        onConfirm = {
+            subtypeToDelete?.let { subtype ->
+                subtypeManager.removeSubtype(subtype)
+                navController.popBackStack()
+            }
+            subtypeToDelete = null
+        },
+    )
+}
+
+@Composable
+private fun SubtypeProperty(text: String, content: @Composable () -> Unit) {
+    Column(modifier = Modifier.padding(vertical = 8.dp, horizontal = 8.dp)) {
+        Text(
+            modifier = Modifier.padding(bottom = 8.dp),
+            text = text,
+            style = MaterialTheme.typography.titleSmall,
+        )
+        content()
+    }
+}
+
+@Composable
+private fun SubtypeLayoutDropdown(
+    layoutType: LayoutType,
+    layouts: Map<ExtensionComponentName, LayoutArrangementComponent>,
+    showSelectAsError: Boolean,
+    layoutMap: SubtypeLayoutMap,
+    onLayoutMapChanged: (SubtypeLayoutMap) -> Unit,
+    selectListValues: List<String>,
+) {
+    val layoutIds = remember(layouts) { SelectListKeys + layouts.keys.toList() }
+    val layoutLabels = remember(layouts) { selectListValues + layouts.values.map { it.label } }
+    val layoutId = remember(layoutMap) { layoutMap[layoutType] }
+    val expanded = remember { mutableStateOf(false) }
+    val selectedIndex = layoutIds.indexOf(layoutId).coerceAtLeast(0)
+    JetPrefDropdown(
+        options = layoutLabels,
+        expanded = expanded,
+        selectedOptionIndex = selectedIndex,
+        isError = showSelectAsError && selectedIndex == 0,
+        onSelectOption = { onLayoutMapChanged(layoutMap.copy(layoutType = layoutType, componentName = layoutIds[it])!!) },
+        appearance = JetPrefDropdownMenuDefaults.outlined(shape = ShapeDefaults.Small),
+    )
+}
+
+@Composable
+private fun SubtypeGroupSpacer() {
+    Spacer(modifier = Modifier
+        .fillMaxWidth()
+        .height(32.dp))
+}
+
+private fun subtypePresetSummary(subtypePreset: SubtypePreset, bilingualSummary: String): String {
+    return if (subtypePreset.secondaryLocales.isEmpty()) {
+        subtypePreset.preferred.characters.componentId
+    } else {
+        "$bilingualSummary / ${subtypePreset.preferred.characters.componentId}"
+    }
+}

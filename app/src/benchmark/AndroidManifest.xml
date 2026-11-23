@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Debug-key build: leave the signature permissions to the release so
+         both install side by side (see the debug overlay). -->
+    <permission
+        android:name="io.github.sysadmindoc.swiftfloris.permission.REGISTER_ADDON"
+        tools:node="remove"/>
+    <permission
+        android:name="io.github.sysadmindoc.swiftfloris.permission.BIND_MCP"
+        tools:node="remove"/>
+
+    <application>
+        <activity
+            android:name="dev.patrickgold.florisboard.benchmark.BenchmarkInputActivity"
+            android:exported="true"
+            android:theme="@style/FlorisAppTheme"
+            android:windowSoftInputMode="stateAlwaysVisible|adjustResize"/>
+        <activity
+            android:name="dev.patrickgold.florisboard.benchmark.BenchmarkSuggestionActivity"
+            android:exported="true"
+            android:theme="@style/FlorisAppTheme"/>
+        <activity
+            android:name="dev.patrickgold.florisboard.benchmark.BenchmarkDictionaryActivity"
+            android:exported="true"
+            android:theme="@style/FlorisAppTheme"/>
+        <activity
+            android:name="dev.patrickgold.florisboard.benchmark.BenchmarkThemeSwitchActivity"
+            android:exported="true"
+            android:theme="@style/FlorisAppTheme"
+            android:windowSoftInputMode="stateAlwaysVisible|adjustResize"/>
+        <activity
+            android:name="dev.patrickgold.florisboard.benchmark.BenchmarkBackupRestoreActivity"
+            android:exported="true"
+            android:theme="@style/FlorisAppTheme"/>
+        <activity
+            android:name="dev.patrickgold.florisboard.benchmark.BenchmarkMemoryActivity"
+            android:exported="true"
+            android:theme="@style/FlorisAppTheme"/>
+    </application>
+</manifest>

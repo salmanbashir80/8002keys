@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Existing issues
+    url: https://github.com/SysAdminDoc/SwiftFloris/issues
+    about: General chat about SwiftFloris and quick Q/A
+  - name: ❓ Questions / Feedback
+    url: https://github.com/SysAdminDoc/SwiftFloris/issues/new/choose
+    about: Post your questions or feedback in the SwiftFloris issue tracker

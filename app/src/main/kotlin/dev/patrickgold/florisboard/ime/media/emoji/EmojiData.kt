@@ -1,0 +1,266 @@
+/*
+ * Copyright (C) 2024-2025 The FlorisBoard Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.patrickgold.florisboard.ime.media.emoji
+
+import android.content.Context
+import android.util.Log
+import dev.patrickgold.florisboard.lib.FlorisLocale
+import io.github.reactivecircus.cache4k.Cache
+import org.florisboard.lib.android.bufferedReader
+import java.util.*
+import java.util.concurrent.ConcurrentHashMap
+
+private typealias EmojiDataByCategoryImpl = EnumMap<EmojiCategory, MutableList<EmojiSet>>
+private typealias EmojiDataBySkinToneImpl = EnumMap<EmojiSkinTone, MutableList<Emoji>>
+typealias EmojiDataByCategory = Map<EmojiCategory, List<EmojiSet>>
+typealias EmojiDataBySkinTone = Map<EmojiSkinTone, List<Emoji>>
+
+data class EmojiDataVersion(
+    val cldr: String = "unknown",
+    val emoji: String = "unknown",
+) {
+    fun matches(other: EmojiDataVersion): Boolean {
+        return cldr == other.cldr && emoji == other.emoji
+    }
+}
+
+data class EmojiData(
+    val byCategory: EmojiDataByCategory,
+    val bySkinTone: EmojiDataBySkinTone,
+    val version: EmojiDataVersion = EmojiDataVersion(),
+) {
+    companion object {
+        private const val TAG = "EmojiData"
+        private const val BUNDLED_ASSET_PREFIX = "ime/media/emoji/"
+        /** The metadata the checked-in emoji assets are expected to declare. */
+        val BundledVersion = EmojiDataVersion(cldr = "49", emoji = "18.0")
+
+        /**
+         * Language codes a keyboard or Android uses where the bundled file goes by CLDR's code: Android's
+         * Locale still reports Hebrew as "iw" and Indonesian as "in", and Norwegian Bokmal presets say "nb".
+         */
+        private val AssetLanguageAliases = mapOf("iw" to "he", "in" to "id", "nb" to "no")
+
+        // The keycap emoji #️⃣ is "#" followed by one of these, so its data line isn't a comment.
+        private val VariationSelector16 = Char(0xFE0F)
+        private val CombiningEnclosingKeycap = Char(0x20E3)
+
+        private val cache = Cache.Builder<String, EmojiData>().build()
+        private val reportedVersionMismatches = ConcurrentHashMap.newKeySet<String>()
+        val Fallback = empty()
+
+        private fun newByCategory(): EmojiDataByCategoryImpl {
+            return EmojiDataByCategoryImpl(EmojiCategory::class.java).also { map ->
+                for (category in EmojiCategory.entries) {
+                    map[category] = mutableListOf()
+                }
+            }
+        }
+
+        private fun newBySkinTone(): EmojiDataBySkinToneImpl {
+            return EmojiDataBySkinToneImpl(EmojiSkinTone::class.java).also { map ->
+                for (skinTone in EmojiSkinTone.entries) {
+                    map[skinTone] = mutableListOf()
+                }
+            }
+        }
+
+        fun empty(): EmojiData {
+            return EmojiData(newByCategory(), newBySkinTone(), EmojiDataVersion())
+        }
+
+        suspend fun get(context: Context, path: String): EmojiData {
+            val data = cache.get(path) {
+                loadEmojiDataMap(context, path)
+            }
+            reportVersionMismatch(path, data.version)
+            return data
+        }
+
+        suspend fun get(context: Context, locale: FlorisLocale): EmojiData {
+            val path = resolveEmojiAssetPath(context, locale) ?: return empty()
+            return get(context, path)
+        }
+
+        private const val CLDR_VERSION_PREFIX = "# CLDR-VERSION: "
+        private const val EMOJI_VERSION_PREFIX = "# EMOJI-VERSION: "
+
+        private fun loadEmojiDataMap(context: Context, path: String): EmojiData {
+            return context.assets.bufferedReader(path).useLines { lines ->
+                parseEmojiDataLines(lines)
+            }
+        }
+
+        private fun reportVersionMismatch(path: String, version: EmojiDataVersion) {
+            if (!path.startsWith(BUNDLED_ASSET_PREFIX) || version.matches(BundledVersion)) return
+            if (reportedVersionMismatches.add(path)) {
+                Log.w(
+                    TAG,
+                    "Emoji asset $path declares CLDR ${version.cldr} / Emoji ${version.emoji}; " +
+                        "expected CLDR ${BundledVersion.cldr} / Emoji ${BundledVersion.emoji}",
+                )
+            }
+        }
+
+        internal fun parseEmojiDataLines(lines: Sequence<String>): EmojiData {
+            val byCategory = newByCategory()
+            val bySkinTone = newBySkinTone()
+
+            var cldrVersion = "unknown"
+            var emojiVersion = "unknown"
+            var ec: EmojiCategory? = null
+            var emojiEditorList: MutableList<Emoji>? = null
+            // True while skipping the tab-indented variation lines of a base emoji whose
+            // own (non-tab) line was malformed (blank value). Without this, the orphaned
+            // variations would reseed a bogus standalone base with the wrong name.
+            var skipVariations = false
+
+            fun commitEmojiEditorList() {
+                emojiEditorList?.let { byCategory[ec]!!.add(EmojiSet(it)) }
+                emojiEditorList = null
+            }
+
+            for (line in lines) {
+                if (line.startsWith("#") && line.getOrNull(1).let { it != VariationSelector16 && it != CombiningEnclosingKeycap }) {
+                    when {
+                        line.startsWith(CLDR_VERSION_PREFIX) ->
+                            cldrVersion = line.removePrefix(CLDR_VERSION_PREFIX).trim()
+                        line.startsWith(EMOJI_VERSION_PREFIX) ->
+                            emojiVersion = line.removePrefix(EMOJI_VERSION_PREFIX).trim()
+                    }
+                } else if (line.startsWith("[")) {
+                    commitEmojiEditorList()
+                    skipVariations = false
+                    ec = EmojiCategory.entries.find { it.id == line.slice(1 until (line.length - 1)) }
+                } else if (line.trim().isEmpty() || ec == null) {
+                    // Empty line
+                    continue
+                } else {
+                    val isTabLine = line.startsWith("\t")
+                    if (!isTabLine) {
+                        commitEmojiEditorList()
+                        skipVariations = false
+                    } else if (skipVariations) {
+                        // This variation belongs to a base that was dropped as malformed.
+                        continue
+                    }
+                    // Assume it is a data line
+                    val data = line.split(";")
+                    if (data.size == 3) {
+                        val value = data[0].trim()
+                        // ROADMAP section 6 N17.1 - reject malformed asset lines
+                        // whose codepoint column is blank. Downstream
+                        // Paint.hasGlyph("") throws and crashes the
+                        // palette on first render; the bundled assets
+                        // SHOULDN'T contain such lines but a future
+                        // contributor / addon-supplied asset should
+                        // never be able to crash the IME this way.
+                        if (value.isEmpty()) {
+                            // If the malformed line is the BASE of a set, drop the whole
+                            // set: skip its following variation lines so they don't
+                            // reseed a bogus standalone emoji with the wrong name.
+                            if (!isTabLine) skipVariations = true
+                            continue
+                        }
+                        val base = emojiEditorList?.first()
+                        val ownKeywords = data[2].split("|").map { it.trim() }
+                        val emoji = Emoji(
+                            value = value,
+                            name = base?.name ?: data[1].trim(),
+                            // A skin tone line lists only what it adds ("light skin tone"), so 👍🏻 still
+                            // matches "good" in suggestions and its tag sheet.
+                            keywords = if (base == null) {
+                                ownKeywords
+                            } else {
+                                (base.keywords + ownKeywords).filter { it.isNotEmpty() }.distinct()
+                            },
+                        )
+                        if (emojiEditorList != null) {
+                            emojiEditorList!!.add(emoji)
+                        } else {
+                            emojiEditorList = mutableListOf(emoji)
+                        }
+                    }
+                }
+            }
+            commitEmojiEditorList()
+
+            for (category in byCategory.keys) {
+                for (emojiSet in byCategory[category]!!) {
+                    if (emojiSet.emojis.size == 1) {
+                        // No variations provided, we fallback to using the base for all skin tones
+                        val base = emojiSet.emojis.first()
+                        for (skinTone in EmojiSkinTone.entries) {
+                            bySkinTone[skinTone]!!.add(base)
+                        }
+                        continue
+                    }
+                    for (emoji in emojiSet.emojis) {
+                        bySkinTone[emoji.skinTone]!!.add(emoji)
+                    }
+                }
+            }
+
+            return EmojiData(byCategory, bySkinTone, EmojiDataVersion(cldrVersion, emojiVersion))
+        }
+
+        /**
+         * Resolves the path to the emoji asset file based on the active keyboard subtype and active locale.
+         *
+         * This method prioritizes usage of cached emoji layout maps when available. If a cached map is found then return,
+         * the parseRawEmojiSpecsFile will correctly return the cached data
+         *
+         * It then attempts to locate a matching emoji asset file within the "ime/media/emoji/" directory in the
+         * application's assets based on locale priority:
+         * - Primary locale of the active subtype
+         * - Secondary locales of the active subtype
+         * - Root path ("ime/media/emoji/root.txt") as a fallback
+         *
+         * For each locale, file matching follows this preference order:
+         * - {language}_{country}_{variant}.txt
+         * - {language}_{country}.txt
+         * - {language}.txt
+         *
+         * The language goes by CLDR's code, so "iw", "in" and "nb" look for the "he", "id" and "no" files.
+         *
+         * @param context The context used to access application assets.
+         * @param locale The locale to resolve for.
+         *
+         * @return The path to the emoji asset file, or null if no file matches.
+         */
+        private fun resolveEmojiAssetPath(context: Context, locale: FlorisLocale): String? {
+            val emojiAssets = context.assets.list("ime/media/emoji/")!!.toList()
+            return resolveEmojiAssetFile(emojiAssets, locale.language, locale.country, locale.variant)
+                ?.let { file -> "ime/media/emoji/$file" }
+        }
+
+        internal fun resolveEmojiAssetFile(
+            emojiAssets: List<String>,
+            language: String,
+            country: String,
+            variant: String,
+        ): String? {
+            val lang = language.lowercase().let { AssetLanguageAliases[it] ?: it }
+            val candidates = buildList {
+                if (country.isNotBlank() && variant.isNotBlank()) add("${lang}_${country}_${variant}.txt")
+                if (country.isNotBlank()) add("${lang}_${country}.txt")
+                add("${lang}.txt")
+            }
+            return candidates.firstOrNull { it in emojiAssets }
+        }
+    }
+}

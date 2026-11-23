@@ -1,0 +1,47 @@
+# F-Droid build metadata for SwiftFloris
+# Submit this file to https://gitlab.com/fdroid/fdroiddata via merge request.
+# See: https://f-droid.org/docs/Build_Metadata_Reference/
+
+Categories:
+  - System
+  - Writing
+
+License: Apache-2.0
+
+AuthorName: SysAdminDoc
+AuthorWebSite: https://github.com/SysAdminDoc
+
+SourceCode: https://github.com/SysAdminDoc/SwiftFloris
+IssueTracker: https://github.com/SysAdminDoc/SwiftFloris/issues
+Changelog: https://github.com/SysAdminDoc/SwiftFloris/releases
+
+AutoName: SwiftFloris
+
+RepoType: git
+Repo: https://github.com/SysAdminDoc/SwiftFloris.git
+
+Builds:
+  - versionName: "1.9.70"
+    versionCode: 2119
+    commit: v1.9.70
+    submodules: true
+    sudo:
+      - apt-get update
+      - apt-get install -y openjdk-17-jdk-headless
+      - update-alternatives --auto java
+    gradle:
+      - yes
+    output: app/build/outputs/apk/release/app-release-unsigned.apk
+    binary: https://github.com/SysAdminDoc/SwiftFloris/releases/download/v%v/SwiftFloris-v%v-release.apk
+
+# SHA-256 of the release signing certificate, read from the published v1.9.66
+# APK with `apksigner verify --print-certs`. Every published SwiftFloris APK
+# must verify against this key; F-Droid rejects the binary comparison otherwise.
+AllowedAPKSigningKeys:
+  - dba1aa88e37b90155fca3135ca3b781de92c225107e47c9806e75bf88055fdd8
+
+ArchivePolicy: 6
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: "1.9.70"
+CurrentVersionCode: 2119

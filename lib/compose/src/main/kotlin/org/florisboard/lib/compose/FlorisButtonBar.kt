@@ -1,0 +1,122 @@
+/*
+ * Copyright (C) 2021-2025 The FlorisBoard Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.florisboard.lib.compose
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
+
+@Composable
+fun FlorisButtonBar(content: @Composable FlorisButtonBarScope.() -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding(),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 3.dp,
+    ) {
+        Column {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = FlorisSurfaceTokens.HairlineAlpha),
+            ) {}
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .widthIn(max = 840.dp)
+                        .fillMaxWidth()
+                        .padding(top = 8.dp, bottom = 8.dp, start = 0.dp, end = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val scope = FlorisButtonBarScope(this)
+                    content(scope)
+                }
+            }
+        }
+    }
+}
+
+class FlorisButtonBarScope(rowScope: RowScope) : RowScope by rowScope {
+    @Composable
+    fun ButtonBarButton(
+        text: String,
+        modifier: Modifier = Modifier,
+        enabled: Boolean = true,
+        icon: ImageVector? = null,
+        onClick: () -> Unit,
+    ) {
+        FlorisButton(
+            modifier = modifier
+                .padding(start = 16.dp)
+                .defaultMinSize(minHeight = FlorisTouchTarget.MinSize),
+            enabled = enabled,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ),
+            icon = icon,
+            text = text,
+            onClick = onClick,
+        )
+    }
+
+    @Composable
+    fun ButtonBarTextButton(
+        text: String,
+        modifier: Modifier = Modifier,
+        enabled: Boolean = true,
+        icon: ImageVector? = null,
+        onClick: () -> Unit,
+    ) {
+        FlorisTextButton(
+            modifier = modifier
+                .padding(start = 16.dp)
+                .defaultMinSize(minHeight = FlorisTouchTarget.MinSize),
+            enabled = enabled,
+            colors = ButtonDefaults.textButtonColors(
+                contentColor = MaterialTheme.colorScheme.primary,
+            ),
+            icon = icon,
+            text = text,
+            onClick = onClick,
+        )
+    }
+
+    @Composable
+    fun ButtonBarSpacer() {
+        Spacer(modifier = Modifier.weight(1f))
+    }
+}

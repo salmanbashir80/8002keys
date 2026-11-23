@@ -1,0 +1,220 @@
+/*
+ * Copyright (C) 2021-2025 The FlorisBoard Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.patrickgold.florisboard.ime.keyboard
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import dev.patrickgold.florisboard.app.FlorisPreferenceStore
+import dev.patrickgold.florisboard.ime.nlp.NlpInlineAutofill
+import dev.patrickgold.florisboard.ime.smartbar.ExtendedActionsPlacement
+import dev.patrickgold.florisboard.ime.smartbar.InlineSuggestionsChipMargin
+import dev.patrickgold.florisboard.ime.smartbar.SmartbarLayout
+import dev.patrickgold.florisboard.ime.text.keyboard.TextKeyboard
+import dev.patrickgold.florisboard.ime.text.keyboard.TextKeyboardLayoutPolicy
+import dev.patrickgold.florisboard.ime.window.LocalWindowController
+import dev.patrickgold.florisboard.ime.window.ImeWindowConstraints
+import dev.patrickgold.florisboard.keyboardManager
+import dev.patrickgold.jetpref.datastore.model.collectAsState
+
+private val LocalKeyboardRowBaseHeight = compositionLocalOf { 65.dp }
+private val LocalSmartbarHeight = compositionLocalOf { 40.dp }
+private val NoResizePreview: State<Dp?> = object : State<Dp?> {
+    override val value: Dp? = null
+}
+private val LocalResizePreviewExtraHeight = compositionLocalOf { NoResizePreview }
+
+object FlorisImeSizing {
+    val minInteractiveTouchSize: Dp = ImeWindowConstraints.MinInteractiveTouchSize
+
+    val keyboardRowBaseHeight: Dp
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalKeyboardRowBaseHeight.current
+
+    val smartbarHeight: Dp
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalSmartbarHeight.current
+
+    /**
+     * How much taller than its laid-out rows the keyboard is drawn while a resize drag runs, or null when
+     * none is. See [resizeGesturePreview].
+     */
+    val resizePreviewExtraHeight: State<Dp?>
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalResizePreviewExtraHeight.current
+
+    @Composable
+    fun keyboardUiHeight(): Dp {
+        val rowCount by keyboardRowCountAsState()
+        return (keyboardRowBaseHeight * rowCount)
+    }
+
+    /**
+     * The key row count [keyboardUiHeight] sizes the keyboard for: the last character layout's while a
+     * characters, symbols or advanced numeric layout is up, the active layout's otherwise.
+     */
+    @Composable
+    fun keyboardRowCountAsState(): State<Int> {
+        val context = LocalContext.current
+        val keyboardManager by context.keyboardManager()
+        val evaluator = keyboardManager.activeEvaluator.collectAsState()
+        val lastCharactersEvaluator = keyboardManager.lastCharactersEvaluator.collectAsState()
+        return remember(evaluator, lastCharactersEvaluator) {
+            derivedStateOf {
+                when (evaluator.value.keyboard.mode) {
+                    KeyboardMode.CHARACTERS,
+                    KeyboardMode.NUMERIC_ADVANCED,
+                    KeyboardMode.SYMBOLS,
+                    KeyboardMode.SYMBOLS2 -> lastCharactersEvaluator.value.keyboard as TextKeyboard
+                    else -> evaluator.value.keyboard as TextKeyboard
+                }.rowCount.let(TextKeyboardLayoutPolicy::effectiveRowCount)
+            }
+        }
+    }
+
+    @Composable
+    fun rowCountAsState(): State<Int> {
+        val context = LocalContext.current
+        val keyboardManager by context.keyboardManager()
+        val lastCharactersEvaluator by keyboardManager.lastCharactersEvaluator.collectAsState()
+        return remember {
+            derivedStateOf {
+                val keyboard = lastCharactersEvaluator.keyboard as TextKeyboard
+                TextKeyboardLayoutPolicy.effectiveRowCount(keyboard.rowCount)
+            }
+        }
+    }
+
+    @Composable
+    fun smartbarRowCountAsState(): State<Int> {
+        val prefs by FlorisPreferenceStore
+        val smartbarEnabled by prefs.smartbar.enabled.collectAsState()
+        val smartbarLayout by prefs.smartbar.layout.collectAsState()
+        val extendedActionsExpanded by prefs.smartbar.extendedActionsExpanded.collectAsState()
+        val extendedActionsPlacement by prefs.smartbar.extendedActionsPlacement.collectAsState()
+        return remember {
+            derivedStateOf {
+                if (smartbarEnabled) {
+                    if (smartbarLayout == SmartbarLayout.SUGGESTIONS_ACTIONS_EXTENDED && extendedActionsExpanded &&
+                        extendedActionsPlacement != ExtendedActionsPlacement.OVERLAY_APP_UI) {
+                        2
+                    } else {
+                        1
+                    }
+                } else {
+                    0
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun smartbarUiHeight(): Dp {
+        val smartbarRowCount by smartbarRowCountAsState()
+        return smartbarHeight * smartbarRowCount
+    }
+
+    @Composable
+    fun imeUiHeight(): Dp {
+        return keyboardUiHeight() + smartbarUiHeight()
+    }
+}
+
+/**
+ * Provides [LocalKeyboardRowBaseHeight] / [LocalSmartbarHeight] to [content], held at the start of a resize
+ * drag, plus [FlorisImeSizing.resizePreviewExtraHeight] for [resizeGesturePreview] to stretch them with.
+ *
+ * This is the current, load-bearing API — its single caller is `ImeWindow`.
+ * It was previously annotated `@Deprecated("TODO: move logic fully into ImeWindow
+ * impl")`, but that misused `@Deprecated` as a refactor marker and emitted a
+ * spurious deprecation warning at the only call site. The intent stands as a
+ * plain TODO: fold this height-derivation into the `ImeWindow` composable so the
+ * composition locals are provided there directly.
+ */
+// TODO: move this height derivation fully into the ImeWindow impl.
+@Composable
+fun ProvideKeyboardRowBaseHeight(content: @Composable () -> Unit) {
+    val windowController = LocalWindowController.current
+    val density = LocalDensity.current
+
+    val windowSpecState = windowController.activeWindowSpec.collectAsState()
+    val windowSpec by windowSpecState
+    val editorState = windowController.editor.state.collectAsState()
+    val keyboardRowCount = FlorisImeSizing.keyboardRowCountAsState()
+    val smartbarRowCount = FlorisImeSizing.smartbarRowCountAsState()
+
+    val liveHeights = remember(windowSpecState) {
+        derivedStateOf { ImeRowHeights.of(windowSpecState.value) }
+    }
+    // A resize drag keeps the rows the drag began with, and resizeGesturePreview stretches them to the dragged
+    // height. Handing out the live heights made every key lay out again on every frame of the drag (issue
+    // #23). The live heights aren't read here during the drag, so the drag doesn't recompose this either.
+    val gestureStartSpec = windowController.editor.gestureStartSpec
+        .takeIf { editorState.value.isResizeGesture }
+    val (rowHeight, smartbarRowHeight) = gestureStartSpec?.let { ImeRowHeights.of(it) } ?: liveHeights.value
+    val resizePreviewExtraHeight = remember(windowSpecState, editorState, keyboardRowCount, smartbarRowCount) {
+        derivedStateOf {
+            val startSpec = windowController.editor.gestureStartSpec
+                .takeIf { editorState.value.isResizeGesture }
+                ?: return@derivedStateOf null
+            ResizeGesturePreview.extraHeight(
+                start = ImeRowHeights.of(startSpec),
+                live = ImeRowHeights.of(windowSpecState.value),
+                keyboardRowCount = keyboardRowCount.value,
+                smartbarRowCount = smartbarRowCount.value,
+            )
+        }
+    }
+
+    SideEffect {
+        val marginV = InlineSuggestionsChipMargin.calculateTopPadding() +
+            InlineSuggestionsChipMargin.calculateBottomPadding()
+        NlpInlineAutofill.suggestionsChipHeightPx = with(density) {
+            (smartbarRowHeight - marginV).roundToPx()
+        }
+        val marginH = InlineSuggestionsChipMargin.calculateLeftPadding(LayoutDirection.Ltr) +
+            InlineSuggestionsChipMargin.calculateRightPadding(LayoutDirection.Ltr)
+        NlpInlineAutofill.suggestionsChipMaxWidthPx = with(density) {
+            (windowSpec.props.keyboardWidth(windowSpec.constraints) - marginH)
+                .coerceAtLeast(0.dp)
+                .roundToPx()
+        }
+    }
+
+    CompositionLocalProvider(
+        LocalKeyboardRowBaseHeight provides rowHeight,
+        LocalSmartbarHeight provides smartbarRowHeight,
+        LocalResizePreviewExtraHeight provides resizePreviewExtraHeight,
+    ) {
+        content()
+    }
+}
