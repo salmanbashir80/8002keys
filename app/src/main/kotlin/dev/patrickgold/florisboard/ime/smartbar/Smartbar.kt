@@ -316,7 +316,9 @@ private fun SmartbarMainRow(modifier: Modifier = Modifier) {
                 ToggleOverflowPanelAction
             }
 
-            else -> null
+            else -> dev.patrickgold.florisboard.ime.smartbar.quickaction.QuickAction.InsertKey(
+                dev.patrickgold.florisboard.ime.text.keyboard.TextKeyData.IME_UI_MODE_AI_ASSISTANT,
+            )
         }
 
         if (action != null) {

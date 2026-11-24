@@ -74,11 +74,12 @@ data class QuickActionArrangement(
         val Default = QuickActionArrangement(
             stickyAction = null,
             dynamicActions = listOf(
+                QuickAction.InsertKey(TextKeyData.IME_UI_MODE_AI_ASSISTANT),
+                QuickAction.InsertKey(TextKeyData.TOGGLE_RESIZE_MODE),
                 QuickAction.InsertKey(TextKeyData.UNDO),
                 QuickAction.InsertKey(TextKeyData.REDO),
                 QuickAction.InsertKey(TextKeyData.SETTINGS),
                 QuickAction.InsertKey(TextKeyData.TOGGLE_FLOATING_WINDOW),
-                QuickAction.InsertKey(TextKeyData.TOGGLE_RESIZE_MODE),
                 QuickAction.InsertKey(TextKeyData.IME_UI_MODE_CLIPBOARD),
                 QuickAction.InsertKey(TextKeyData.IME_UI_MODE_MEDIA),
                 QuickAction.InsertKey(TextKeyData.TOGGLE_COMPACT_LAYOUT),

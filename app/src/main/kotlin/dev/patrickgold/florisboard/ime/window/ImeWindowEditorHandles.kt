@@ -29,6 +29,12 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.systemGestureExclusion
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -40,6 +46,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.RoundRect
@@ -50,11 +57,15 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.patrickgold.florisboard.R
 import dev.patrickgold.florisboard.app.FlorisPreferenceStore
 import dev.patrickgold.florisboard.ime.keyboard.FlorisImeSizing
@@ -240,44 +251,82 @@ fun BoxScope.ImeWindowResizeHandlesFixed() {
                 .background(overlayColor)
         )
 
-        Row(
+        Column(
             modifier = Modifier
                 .matchParentSize()
-                .padding(vertical = constraints.resizeHandleTouchSize),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
+                .padding(vertical = constraints.resizeHandleTouchSize / 2),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
-            SnyggIconButton(
-                elementName = FlorisImeUi.WindowResizeAction.elementName,
-                attributes = attributes,
-                onClick = { windowController.actions.resetFixedSize() },
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                SnyggIcon(
-                    elementName = FlorisImeUi.WindowResizeAction.elementName,
-                    imageVector = drawableRes(R.drawable.ic_restart_alt),
+                ResizeOverlayChip(
+                    label = "−",
+                    onClick = { windowController.actions.stepFixedHeight((-18).dp) },
                 )
-            }
+                SnyggIconButton(
+                    elementName = FlorisImeUi.WindowResizeAction.elementName,
+                    attributes = attributes,
+                    onClick = { windowController.actions.resetFixedSize() },
+                ) {
+                    SnyggIcon(
+                        elementName = FlorisImeUi.WindowResizeAction.elementName,
+                        imageVector = drawableRes(R.drawable.ic_restart_alt),
+                    )
+                }
 
-            SnyggIconButton(
-                FlorisImeUi.WindowMoveHandle.elementName,
-                attributes = attributes,
-                onClick = {}
-            ) {
-                SnyggIcon(
-                    elementName = FlorisImeUi.WindowMoveHandle.elementName,
-                    imageVector = drawableRes(R.drawable.ic_drag_pan),
+                SnyggIconButton(
+                    FlorisImeUi.WindowMoveHandle.elementName,
+                    attributes = attributes,
+                    onClick = {},
                     modifier = Modifier.imeWindowMoveHandle(windowController),
+                ) {
+                    SnyggIcon(
+                        elementName = FlorisImeUi.WindowMoveHandle.elementName,
+                        imageVector = drawableRes(R.drawable.ic_drag_pan),
+                    )
+                }
+
+                SnyggIconButton(
+                    elementName = FlorisImeUi.WindowResizeAction.elementName,
+                    attributes = attributes,
+                    onClick = { windowController.editor.disable() },
+                ) {
+                    SnyggIcon(
+                        elementName = FlorisImeUi.WindowResizeAction.elementName,
+                        imageVector = drawableRes(R.drawable.ic_check),
+                    )
+                }
+                ResizeOverlayChip(
+                    label = "+",
+                    onClick = { windowController.actions.stepFixedHeight(18.dp) },
                 )
             }
-
-            SnyggIconButton(
-                elementName = FlorisImeUi.WindowResizeAction.elementName,
-                attributes = attributes,
-                onClick = { windowController.editor.disable() },
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                SnyggIcon(
-                    elementName = FlorisImeUi.WindowResizeAction.elementName,
-                    imageVector = drawableRes(R.drawable.ic_check),
+                listOf(
+                    "S" to 0.85f,
+                    "M" to 1.00f,
+                    "L" to 1.15f,
+                    "XL" to 1.30f,
+                ).forEach { (label, scale) ->
+                    ResizeOverlayChip(
+                        label = label,
+                        onClick = { windowController.actions.setFixedHeightPreset(scale) },
+                    )
+                }
+                ResizeOverlayChip(
+                    label = "1-Hand",
+                    onClick = { windowController.actions.toggleCompactLayout() },
+                )
+                ResizeOverlayChip(
+                    label = "Float",
+                    onClick = { windowController.actions.toggleFloatingWindow() },
                 )
             }
         }
@@ -335,6 +384,28 @@ fun BoxScope.ImeWindowResizeHandlesFixed() {
 }
 
 @Composable
+private fun ResizeOverlayChip(
+    label: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.Black.copy(alpha = 0.72f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
 fun BoxScope.ImeWindowResizeHandlesFloating() {
     val windowController = LocalWindowController.current
 
@@ -348,7 +419,7 @@ fun BoxScope.ImeWindowResizeHandlesFloating() {
     }
     LaunchedEffect(isFloatingAndEditorAndNoGestureActive) {
         if (isFloatingAndEditorAndNoGestureActive) {
-            delay(3000L)
+            delay(8000L)
             windowController.editor.disable()
         }
     }
@@ -436,28 +507,45 @@ private fun Modifier.imeWindowEditorHandle(
 ): Modifier = this.composed {
     val rowCount by FlorisImeSizing.rowCountAsState()
     val smartbarRowCount by FlorisImeSizing.smartbarRowCountAsState()
+    var layoutCoordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
     Modifier
+        .onGloballyPositioned { coords ->
+            layoutCoordinates[0] = coords
+        }
         .pointerInput(Unit) {
             detectTapGestures {
                 onTap()
             }
         }
         .pointerInput(Unit) {
-            // TODO evaluate if using (current - initial position) results in less rounding errors
-            //  drawback: we need the coords via onGloballyPositioned
             var accumulatedOffset = Offset.Zero
+            var startRootOffset = Offset.Zero
+            var hasRootStart = false
             var initialSpec = ImeWindowSpec.Fallback
             var currentSpec = ImeWindowSpec.Fallback
             detectDragGestures(
-                onDragStart = {
+                onDragStart = { startLocal ->
                     accumulatedOffset = Offset.Zero
+                    val coords = layoutCoordinates[0]
+                    if (coords != null && coords.isAttached) {
+                        startRootOffset = coords.localToRoot(startLocal)
+                        hasRootStart = true
+                    } else {
+                        hasRootStart = false
+                    }
                     initialSpec = onBeginGesture()
                     currentSpec = initialSpec
                 },
                 onDrag = { change, dragAmount ->
                     change.consume()
                     accumulatedOffset += dragAmount
-                    currentSpec = onGesture(initialSpec, accumulatedOffset.toDp(), rowCount, smartbarRowCount)
+                    val coords = layoutCoordinates[0]
+                    val totalOffset = if (hasRootStart && coords != null && coords.isAttached) {
+                        coords.localToRoot(change.position) - startRootOffset
+                    } else {
+                        accumulatedOffset
+                    }
+                    currentSpec = onGesture(initialSpec, totalOffset.toDp(), rowCount, smartbarRowCount)
                 },
                 onDragEnd = {
                     onEndGesture(currentSpec)

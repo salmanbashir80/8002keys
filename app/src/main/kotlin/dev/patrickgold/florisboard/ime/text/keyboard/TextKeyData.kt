@@ -479,6 +479,12 @@ data class TextKeyData(
             code = KeyCode.IME_UI_MODE_CLIPBOARD,
             label = "ime_ui_mode_clipboard",
         )
+        /** Predefined key data for [KeyCode.IME_UI_MODE_AI_ASSISTANT] */
+        val IME_UI_MODE_AI_ASSISTANT = TextKeyData(
+            type = KeyType.SYSTEM_GUI,
+            code = KeyCode.IME_UI_MODE_AI_ASSISTANT,
+            label = "ime_ui_mode_ai_assistant",
+        )
 
         /** Predefined key data for [KeyCode.SYSTEM_INPUT_METHOD_PICKER] */
         val SYSTEM_INPUT_METHOD_PICKER = TextKeyData(

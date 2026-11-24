@@ -108,6 +108,14 @@ class FlorisApplication : Application() {
             // installed. Out-of-tree addon variants can still override
             // via WordStylesRendererRegistry.setActive(...).
             WordStylesRendererRegistry.setActive(WordStylesCanvasRenderer(this))
+            // Initialize persistent AI Memory Vault (restores Gemini & ChatGPT accounts + learned memory across reinstalls)
+            dev.patrickgold.florisboard.ime.ai.AiMemoryVault.initialize(this)
+            dev.patrickgold.florisboard.ime.smartcompose.RewriteProviderRegistry.setActive(
+                dev.patrickgold.florisboard.ime.ai.CloudAiClient.asRewriteProvider(this),
+            )
+            dev.patrickgold.florisboard.ime.translate.InlineTranslatorRegistry.setActive(
+                dev.patrickgold.florisboard.ime.ai.CloudAiClient.asInlineTranslator(this),
+            )
             // SmartCompose feature contract F18 — bind the on-device n-gram
             // heuristic SmartComposeProvider as the baseline so inline
             // ghost-text works without any LLM addon. Gated at call time by

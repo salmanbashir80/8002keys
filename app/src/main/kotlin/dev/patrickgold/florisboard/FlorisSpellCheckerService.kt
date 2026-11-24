@@ -175,15 +175,26 @@ class FlorisSpellCheckerService : SpellCheckerService() {
             flogInfo(LogTopic.SPELL_EVENTS)
 
             val fallback = super.onGetSentenceSuggestionsMultiple(textInfos, suggestionsLimit)
-            if (!BuildConfig.DEBUG || textInfos == null || !locale.startsWith("en", ignoreCase = true)) {
+            if (textInfos == null) {
                 return fallback
             }
+            val aiGrammarEnabled = dev.patrickgold.florisboard.ime.ai.AiMemoryVault.state.value.aiGrammarSpellCheckEnabled
 
-            // The evaluator lives only in app/src/debug. Reflection keeps release APKs free of
-            // the spike while still exercising Android's real sentence spell-checker callback on
-            // a connected device. A missing or broken evaluator must never affect normal spelling.
             return Array(textInfos.size) { index ->
-                debugGrammarSuggestion(textInfos[index], suggestionsLimit)
+                val aiSentenceSuggestion = if (aiGrammarEnabled) {
+                    dev.patrickgold.florisboard.ime.ai.LocalGrammarAndRewriteEngine.evaluateSentenceSuggestions(
+                        textInfo = textInfos[index],
+                        suggestionsLimit = suggestionsLimit,
+                    )
+                } else {
+                    null
+                }
+                aiSentenceSuggestion
+                    ?: (if (BuildConfig.DEBUG && locale.startsWith("en", ignoreCase = true)) {
+                        debugGrammarSuggestion(textInfos[index], suggestionsLimit)
+                    } else {
+                        null
+                    })
                     ?: fallback.getOrNull(index)
                     ?: SentenceSuggestionsInfo(emptyArray(), intArrayOf(), intArrayOf())
             }

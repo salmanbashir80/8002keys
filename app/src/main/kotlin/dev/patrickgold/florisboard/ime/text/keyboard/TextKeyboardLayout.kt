@@ -720,6 +720,7 @@ internal fun keyContentDescription(
         KeyCode.IME_UI_MODE_TEXT -> dev.patrickgold.florisboard.R.string.a11y__key__ime_text
         KeyCode.IME_UI_MODE_MEDIA -> dev.patrickgold.florisboard.R.string.a11y__key__ime_media
         KeyCode.IME_UI_MODE_CLIPBOARD -> dev.patrickgold.florisboard.R.string.a11y__key__ime_clipboard
+        KeyCode.IME_UI_MODE_AI_ASSISTANT -> dev.patrickgold.florisboard.R.string.a11y__key__ime_ai_assistant
         KeyCode.TOGGLE_SMARTBAR_VISIBILITY -> dev.patrickgold.florisboard.R.string.a11y__key__toggle_smartbar_visibility
         KeyCode.TOGGLE_ACTIONS_OVERFLOW -> dev.patrickgold.florisboard.R.string.a11y__key__toggle_actions_overflow
         KeyCode.TOGGLE_ACTIONS_EDITOR -> dev.patrickgold.florisboard.R.string.a11y__key__toggle_actions_editor

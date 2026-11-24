@@ -185,6 +185,8 @@
     <string name="quick_action__ime_ui_mode_clipboard__tooltip">Open clipboard history</string>
     <string name="quick_action__ime_ui_mode_media" comment="Please mind the limited available space for the quick action strings">Emoji</string>
     <string name="quick_action__ime_ui_mode_media__tooltip">Open emoji panel</string>
+    <string name="quick_action__ime_ui_mode_ai_assistant" comment="Please mind the limited available space for the quick action strings">AI Write</string>
+    <string name="quick_action__ime_ui_mode_ai_assistant__tooltip">Open Gemini and ChatGPT AI grammar, spell check, and writing studio</string>
     <string name="quick_action__language_switch" comment="Please mind the limited available space for the quick action strings">Switch language</string>
     <string name="quick_action__language_switch__tooltip">Perform language switch</string>
     <string name="quick_action__settings" comment="Please mind the limited available space for the quick action strings">Settings</string>
@@ -2725,6 +2727,7 @@
     <string name="a11y__key__ime_text">Text mode</string>
     <string name="a11y__key__ime_media">Emoji and media</string>
     <string name="a11y__key__ime_clipboard">Clipboard</string>
+    <string name="a11y__key__ime_ai_assistant">AI Assistant and Grammar Checker</string>
     <string name="a11y__key__toggle_smartbar_visibility">Toggle smartbar</string>
     <string name="a11y__key__toggle_actions_overflow">More smartbar actions</string>
     <string name="a11y__key__toggle_actions_editor">Edit smartbar actions</string>

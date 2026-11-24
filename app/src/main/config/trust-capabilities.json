@@ -8,6 +8,7 @@
   },
   "baseApp": {
     "usesPermissions": [
+      "android.permission.INTERNET",
       "android.permission.POST_NOTIFICATIONS",
       "android.permission.QUERY_ADVANCED_PROTECTION_MODE",
       "android.permission.READ_CALENDAR",
@@ -18,7 +19,7 @@
       "com.salmanbashir.keys8002.permission.BIND_MCP",
       "com.salmanbashir.keys8002.permission.REGISTER_ADDON"
     ],
-    "networkPermission": false
+    "networkPermission": true
   },
   "enrollment": {
     "allowedPermissions": [
@@ -33,6 +34,7 @@
     ],
     "signaturePermissionPrefix": "com.salmanbashir.keys8002.permission.",
     "baseManifestPermissions": [
+      "android.permission.INTERNET",
       "com.salmanbashir.keys8002.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
       "com.salmanbashir.keys8002.bench.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
     ],

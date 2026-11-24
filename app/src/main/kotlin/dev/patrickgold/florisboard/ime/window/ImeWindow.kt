@@ -310,6 +310,9 @@ private fun ImeInnerWindow() {
                 ImeUiMode.TEXT -> TextInputLayout()
                 ImeUiMode.MEDIA -> ProvideActualLayoutDirection { MediaInputLayout() }
                 ImeUiMode.CLIPBOARD -> ProvideActualLayoutDirection { ClipboardInputLayout() }
+                ImeUiMode.AI_ASSISTANT -> ProvideActualLayoutDirection {
+                    dev.patrickgold.florisboard.ime.ai.AiAssistantInputLayout()
+                }
             }
             ImeSystemUiFloating()
         }

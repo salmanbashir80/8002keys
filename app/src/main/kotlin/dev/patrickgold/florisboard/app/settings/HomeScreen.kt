@@ -44,6 +44,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.automirrored.outlined.Assignment
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -198,6 +199,13 @@ private class SettingsHomeLink(val title: String, val onClick: () -> Unit)
 private fun settingsHomeEntries(): List<SettingsHomeEntry> {
     val navController = LocalNavController.current
     return listOf(
+        SettingsHomeEntry.Link(
+            id = "ai-assistant",
+            icon = Icons.Default.AutoAwesome,
+            title = "AI Assistant, Gemini & ChatGPT Login",
+            summary = "Google Gemini & ChatGPT login, AI grammar/spell check, and persistent memory across installs",
+            onClick = { navController.navigate(Routes.Settings.AiAssistant) },
+        ),
         SettingsHomeEntry.Page(
             id = "keyboard",
             icon = Icons.Outlined.Keyboard,

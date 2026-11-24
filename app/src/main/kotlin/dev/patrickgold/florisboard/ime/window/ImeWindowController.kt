@@ -18,7 +18,9 @@ package dev.patrickgold.florisboard.ime.window
 
 import android.content.res.Configuration
 import android.inputmethodservice.InputMethodService
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.coerceIn
 import androidx.compose.ui.unit.height
 import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.min
@@ -533,6 +535,36 @@ class ImeWindowController(
             updateWindowConfig { config ->
                 config.copy(
                     fixedProps = config.fixedProps.minus(config.fixedMode),
+                )
+            }
+        }
+
+        fun stepFixedHeight(deltaDp: Dp) {
+            val currentSpec = activeWindowSpec.value as? ImeWindowSpec.Fixed ?: return
+            val constraints = currentSpec.constraints
+            val newHeight = (currentSpec.props.keyboardHeight + deltaDp)
+                .coerceIn(constraints.minKeyboardHeight, constraints.maxKeyboardHeight)
+            val updatedSpec = currentSpec.copy(
+                props = currentSpec.props.copy(keyboardHeight = newHeight).constrained(constraints),
+            )
+            updateWindowConfig { config ->
+                config.copy(
+                    fixedProps = config.fixedProps.plus(updatedSpec.fixedMode to updatedSpec.storedProps()),
+                )
+            }
+        }
+
+        fun setFixedHeightPreset(scaleFactor: Float) {
+            val currentSpec = activeWindowSpec.value as? ImeWindowSpec.Fixed ?: return
+            val constraints = currentSpec.constraints
+            val targetHeight = (constraints.defKeyboardHeight * scaleFactor)
+                .coerceIn(constraints.minKeyboardHeight, constraints.maxKeyboardHeight)
+            val updatedSpec = currentSpec.copy(
+                props = currentSpec.props.copy(keyboardHeight = targetHeight).constrained(constraints),
+            )
+            updateWindowConfig { config ->
+                config.copy(
+                    fixedProps = config.fixedProps.plus(updatedSpec.fixedMode to updatedSpec.storedProps()),
                 )
             }
         }

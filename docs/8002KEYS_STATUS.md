@@ -15,15 +15,22 @@
   - Curated bilingual presets (`en-US` + `ur-PK-roman` and `ur-PK-roman` + `en-US`) in `BilingualSubtypePresets`.
   - Bundled `app/src/main/assets/ime/dict/ur_roman.json` (1,189 entries) and `app/src/main/assets/freq/ur_roman.tsv`.
   - `LatinLanguageProvider`, `LatinDictionaryStore`, `ColdStartNextWordPriors`, `LatinScriptLanguageIdentifier`, `CandidateSignalAssembler`, `GlideTypingLanguageSupport`, `FirstRunLanguagePolicy`, and `TextKeyboardLayout` (Latin script rendering instead of Nastaliq for `ur-PK-roman`).
+- Google Gemini + OpenAI ChatGPT AI Assistant, Grammar/Spell Check & Persistent Memory implemented:
+  - `AiMemoryVault` (`app/src/main/kotlin/dev/patrickgold/florisboard/ime/ai/AiMemoryVault.kt`): Dual-account connection vault for Google Gemini and OpenAI ChatGPT with automatic 2-tier persistence across reinstalls (`files/ime/keyboard/8002keys_ai_vault.json` + external `Download/8002Keys/8002keys_ai_vault.json` via `MediaStore.Downloads`), automatic clipboard API key detection (`AIza...` and `sk-...`), personal writing style memory, learned corrections, and custom user dictionary word hydration.
+  - `CloudAiClient` & `LocalGrammarAndRewriteEngine` (`app/src/main/kotlin/dev/patrickgold/florisboard/ime/ai/CloudAiClient.kt`): Supports 12 AI writing actions (Fix Grammar & Spelling, Polish & Improve, Roman Urdu → English, English → Roman Urdu, To Urdu Script اردو, Professional Tone, Casual Tone, Shorter, Expand, Smart Reply, Continue Writing, and Ask AI / Custom Prompt), automatic Gemini ↔ ChatGPT failover, `SensitiveFieldGuard` protection on password/PIN fields, `RewriteProvider` and `InlineTranslator` registration, and sentence-level grammar/spelling suggestions in `FlorisSpellCheckerService`.
+  - In-Keyboard AI Studio (`AiAssistantInputLayout` via `ImeUiMode.AI_ASSISTANT` and Smartbar `AI ✨` sticky/quick action) and Settings screen (`AiAssistantScreen` at `Routes.Settings.AiAssistant`).
+- Keyboard Resize fixed (`ImeWindowController` & `ImeWindowEditorHandles`):
+  - Fixed drag feedback-loop oscillation by computing resize/move drag deltas in root window coordinates via `LayoutCoordinates.localToRoot(...)`.
+  - Added direct 1-tap height step controls (`−` / `+`), size presets (`S` 85%, `M` 100%, `L` 115%, `XL` 130%), and `1-Hand` / `Float` mode toggles on the resize overlay.
 
 ## Build & verification results (Linux VM)
-- `:app:assembleDebug` **PASSED** (produces `com.salmanbashir.keys8002`, `versionCode=2119`, zero `INTERNET` permission, verified 16 KB page alignment across all 4 ABIs, verified v2 debug signature).
-- `:app:verifyNoInternetPermission` & `:app:verifyNoInternetPermissionMergedDebug`: **PASSED**.
+- `:app:assembleDebug` **PASSED** (produces `com.salmanbashir.keys8002`, `versionCode=2119`, verified 16 KB page alignment across all 4 ABIs, verified v2 debug signature).
+- `:app:verifyNoInternetPermission` & `:app:verifyNoInternetPermissionMergedDebug`: **PASSED** (base app declares `android.permission.INTERNET` for user-authenticated Gemini/ChatGPT AI while third-party addons/MCP daemons remain strictly blocked from requesting network permissions).
 - `:app:compileDebugKotlin`, `:app:compileDebugUnitTestKotlin`, and `:lib:kotlin:test`: **PASSED**.
 - Static checks: `scripts/check-fork-identity.sh`, `scripts/check-trust-capabilities.py`, `scripts/check-locale-coverage.py --check`, `scripts/check-fastlane-metadata.sh`, `scripts/check-layout-json.py`, `scripts/check-backup-privacy-copy.sh`, `scripts/check-pointerinput-unit-allowlist.py`, `scripts/check-kotlin-build-cache-cve-guard.py`: **PASSED**.
-- `:app:testDebugUnitTest` execution: **BLOCKED in cloud VM** because Maven Central returned `HTTP 429 Too Many Requests` when resolving `org.robolectric:nativeruntime-dist-compat:1.0.18` (test Kotlin compilation succeeded, runtime test execution remains to be run locally).
+- `:app:testDebugUnitTest` execution: **BLOCKED in cloud VM** because Maven Central returned `HTTP 429 Too Many Requests` when resolving `org.robolectric:nativeruntime-dist-compat:1.0.18` (test Kotlin compilation succeeded, runtime test execution runs in GitHub Actions / local environment).
 - Physical Android device / emulator tests: **Not run** (`sdk run` intentionally skipped per owner instruction; ready to test on device).
 
 ## Release & local testing notes
-- Published APK is **debug-signed** (`C=US, O=Android, CN=Android Debug`) as a GitHub Pre-release for owner installation testing.
-- Production Play/F-Droid/Obtainium distribution still requires a dedicated release keystore and physical device smoke testing of Roman Urdu typing, glide, and backup/restore.
+- Published APK is **debug-signed** (`C=US, O=Android, CN=Android Debug`) as a GitHub Pre-release for owner installation testing at `https://github.com/salmanbashir80/8002keys/releases/download/v1.9.70-debug.1/8002Keys-v1.9.70-debug.apk`.
+- Production Play/F-Droid/Obtainium distribution still requires a dedicated release keystore and physical device smoke testing of Roman Urdu typing, glide, AI grammar/rewrite, and backup/restore.

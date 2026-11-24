@@ -57,6 +57,7 @@ import dev.patrickgold.florisboard.app.settings.about.AiFeaturesScreen
 import dev.patrickgold.florisboard.app.settings.about.ProjectLicenseScreen
 import dev.patrickgold.florisboard.app.settings.about.ThirdPartyLicensesScreen
 import dev.patrickgold.florisboard.app.settings.addons.AddonsSettingsScreen
+import dev.patrickgold.florisboard.app.settings.ai.AiAssistantScreen
 import dev.patrickgold.florisboard.app.settings.advanced.BackupScreen
 import dev.patrickgold.florisboard.app.settings.advanced.OtherScreen
 import dev.patrickgold.florisboard.app.settings.advanced.PhysicalKeyboardScreen
@@ -274,6 +275,10 @@ object Routes {
         object AiFeatures
 
         @Serializable
+        @Deeplink("settings/ai-assistant")
+        object AiAssistant
+
+        @Serializable
         @Deeplink("settings/about/project-license")
         object ProjectLicense
 
@@ -408,6 +413,7 @@ object Routes {
 
             composableWithDeepLink(Settings.About::class) { AboutScreen() }
             composableWithDeepLink(Settings.AiFeatures::class) { AiFeaturesScreen() }
+            composableWithDeepLink(Settings.AiAssistant::class) { AiAssistantScreen() }
             composableWithDeepLink(Settings.ProjectLicense::class) { ProjectLicenseScreen() }
             composableWithDeepLink(Settings.ThirdPartyLicenses::class) { ThirdPartyLicensesScreen() }
 

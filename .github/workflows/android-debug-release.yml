@@ -98,4 +98,4 @@ jobs:
             --prerelease \
             --target "${GITHUB_SHA}" \
             --title "8002Keys v1.9.70-debug+${short_sha} (Debug Prerelease)" \
-            --notes "Debug-signed APK (`com.salmanbashir.keys8002`) built from `${short_sha}`. SHA-256: `${apk_sha}`. Includes rebranded 8002Keys identity and offline Roman Urdu + English support. Not yet tested on a physical Android device."
+            --notes "Debug-signed APK (`com.salmanbashir.keys8002`) built from `${short_sha}`. SHA-256: `${apk_sha}`. Includes rebranded 8002Keys identity, offline Roman Urdu + English support, Google Gemini & OpenAI ChatGPT Login, AI Grammar & Spell Checker, Persistent Account & AI Memory Vault across reinstalls, In-Keyboard AI Writing Studio (AI ✨), and fixed Keyboard Resize."

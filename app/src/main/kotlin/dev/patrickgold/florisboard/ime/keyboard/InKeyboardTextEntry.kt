@@ -217,6 +217,7 @@ internal object TextEntryKeyPolicy {
         KeyCode.IME_UI_MODE_TEXT,
         KeyCode.IME_UI_MODE_MEDIA,
         KeyCode.IME_UI_MODE_CLIPBOARD,
+        KeyCode.IME_UI_MODE_AI_ASSISTANT,
         KeyCode.IME_HIDE_UI,
         KeyCode.VOICE_INPUT,
         KeyCode.SETTINGS,
