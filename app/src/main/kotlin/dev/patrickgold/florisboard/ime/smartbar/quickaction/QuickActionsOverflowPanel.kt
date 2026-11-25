@@ -93,7 +93,6 @@ import dev.patrickgold.florisboard.ime.ai.AiWritingTask
 import dev.patrickgold.florisboard.ime.ai.CloudAiClient
 import dev.patrickgold.florisboard.ime.ai.launchAiAssistantSettings
 import dev.patrickgold.florisboard.ime.keyboard.FlorisImeSizing
-import dev.patrickgold.florisboard.ime.onehanded.OneHandedMode
 import dev.patrickgold.florisboard.ime.text.key.KeyCode
 import dev.patrickgold.florisboard.ime.text.keyboard.TextKeyData
 import dev.patrickgold.florisboard.ime.theme.FlorisImeUi
@@ -141,7 +140,6 @@ fun QuickActionsOverflowPanel() {
 
     val vaultState by AiMemoryVault.state.collectAsState()
     val autoCorrectEnabled by prefs.correction.autoCorrect.collectAsState()
-    val oneHandedMode by prefs.keyboard.oneHandedMode.collectAsState()
     val isIncognito = keyboardManager.activeState.isIncognitoMode
 
     var isReorderMode by remember { mutableStateOf(false) }
@@ -326,16 +324,8 @@ fun QuickActionsOverflowPanel() {
             id = "modes",
             label = "Modes",
             icon = Icons.Outlined.SettingsApplications,
-            isActive = oneHandedMode != OneHandedMode.OFF,
             onClick = {
-                val nextMode = when (oneHandedMode) {
-                    OneHandedMode.OFF -> OneHandedMode.END
-                    OneHandedMode.END -> OneHandedMode.START
-                    OneHandedMode.START -> OneHandedMode.OFF
-                }
-                scope.launch {
-                    prefs.keyboard.oneHandedMode.set(nextMode)
-                }
+                windowController?.actions?.toggleCompactLayout()
                 closeOverflow()
             },
         ),
