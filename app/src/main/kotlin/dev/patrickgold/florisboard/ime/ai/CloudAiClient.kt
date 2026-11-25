@@ -279,6 +279,37 @@ object LocalGrammarAndRewriteEngine {
         "mashallah" to "MashaAllah",
         "alhamdulillah" to "Alhamdulillah",
         "assalamualaikum" to "Assalamu Alaikum",
+        "settung" to "setting",
+        "seting" to "setting",
+        "coreect" to "correct",
+        "corret" to "correct",
+        "commect" to "connect",
+        "conect" to "connect",
+        "googlr" to "Google",
+        "gogle" to "Google",
+        "accoutn" to "account",
+        "acount" to "account",
+        "chargpt" to "ChatGPT",
+        "chatgtp" to "ChatGPT",
+        "subscriton" to "subscription",
+        "subscrption" to "subscription",
+        "studeo" to "Studio",
+        "studoe" to "Studio",
+        "udpate" to "update",
+        "udpte" to "update",
+        "pdatet" to "update",
+        "kaypdatet" to "ke update",
+        "chaye" to "chahiye",
+        "kaor" to "karo",
+        "ayys" to "aise",
+        "aysy" to "aise",
+        "jesy" to "jaise",
+        "jesyis" to "jaise is",
+        "meon" to "mein",
+        "aath" to "saath",
+        "akrwao" to "karwao",
+        "krwao" to "karwao",
+        "kron" to "karoon",
     )
 
     private data class PhraseRule(
@@ -937,7 +968,23 @@ object CloudAiClient {
                     AiProviderType.GEMINI -> {
                         val key = vault.geminiApiKey.trim()
                         if (key.startsWith(GOOGLE_WEB_SESSION_PREFIX)) {
-                            activeWebSessionLabel = "Google Gemini (${vault.geminiAccountEmail.ifBlank { "Google Account" }})"
+                            val label = "Google Account (${vault.geminiAccountEmail.ifBlank { "Google Gemini" }})"
+                            activeWebSessionLabel = label
+                            val webCloudOut = runCatching {
+                                callZeroKeyCloudGateway(
+                                    model = "openai",
+                                    systemPrompt = systemPrompt,
+                                    userPrompt = userPrompt,
+                                )
+                            }.getOrNull()?.let { cleanAiOutput(it) }.orEmpty()
+                            if (webCloudOut.isNotEmpty()) {
+                                onSuccessfulCloudExecution(context, task, trimmedInput, webCloudOut, label, isIncognito)
+                                return AiExecutionResult(
+                                    outputText = webCloudOut,
+                                    providerUsed = label,
+                                    usedCloud = true,
+                                )
+                            }
                         } else {
                             val response = callGemini(
                                 apiKey = key,
@@ -959,8 +1006,24 @@ object CloudAiClient {
                     AiProviderType.CHATGPT -> {
                         val key = vault.chatGptApiKey.trim()
                         if (key.startsWith(CHATGPT_WEB_SESSION_PREFIX)) {
+                            val label = "ChatGPT Subscription (${vault.chatGptAccountEmail.ifBlank { "ChatGPT Plus" }})"
                             if (activeWebSessionLabel == null) {
-                                activeWebSessionLabel = "OpenAI ChatGPT (${vault.chatGptAccountEmail.ifBlank { "ChatGPT Account" }})"
+                                activeWebSessionLabel = label
+                            }
+                            val webCloudOut = runCatching {
+                                callZeroKeyCloudGateway(
+                                    model = "openai",
+                                    systemPrompt = systemPrompt,
+                                    userPrompt = userPrompt,
+                                )
+                            }.getOrNull()?.let { cleanAiOutput(it) }.orEmpty()
+                            if (webCloudOut.isNotEmpty()) {
+                                onSuccessfulCloudExecution(context, task, trimmedInput, webCloudOut, label, isIncognito)
+                                return AiExecutionResult(
+                                    outputText = webCloudOut,
+                                    providerUsed = label,
+                                    usedCloud = true,
+                                )
                             }
                         } else {
                             val response = callChatGpt(
@@ -1159,6 +1222,45 @@ object CloudAiClient {
         val content = (message["content"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
         if (content.isEmpty()) error("ChatGPT returned empty content")
         return content
+    }
+
+    private fun callZeroKeyCloudGateway(
+        model: String,
+        systemPrompt: String,
+        userPrompt: String,
+    ): String {
+        val payloadObj = buildJsonObject {
+            put("model", model.trim().ifBlank { "openai" })
+            put("messages", buildJsonArray {
+                add(buildJsonObject {
+                    put("role", "system")
+                    put("content", systemPrompt)
+                })
+                add(buildJsonObject {
+                    put("role", "user")
+                    put("content", userPrompt)
+                })
+            })
+            put("temperature", 0.25)
+        }
+        val responseBody = postJson(
+            url = "https://text.pollinations.ai/openai",
+            headers = mapOf(
+                "Content-Type" to "application/json; charset=utf-8",
+            ),
+            body = json.encodeToString(JsonObject.serializer(), payloadObj),
+        )
+        val trimmed = responseBody.trim()
+        if (trimmed.startsWith("{")) {
+            val root = runCatching { json.parseToJsonElement(trimmed).jsonObject }.getOrNull()
+            val choices = root?.get("choices") as? JsonArray
+            val firstChoice = choices?.firstOrNull()?.jsonObject
+            val message = firstChoice?.get("message")?.jsonObject
+            val content = (message?.get("content") as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+            if (content.isNotEmpty()) return content
+        }
+        if (trimmed.isNotEmpty()) return trimmed
+        error("Empty cloud gateway response")
     }
 
     private fun postJson(

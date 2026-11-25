@@ -963,9 +963,13 @@ class NlpManager(
         if (!wordSuggestionsEnabled()) {
             return null
         }
+        val lang = subtypeManager.activeSubtype.primaryLocale.language
         return ImmediateAutocorrect.englishContractionCandidate(
             rawWord = currentWord,
-            languageCode = subtypeManager.activeSubtype.primaryLocale.language,
+            languageCode = lang,
+        ) ?: ImmediateAutocorrect.bilingualTypoCandidate(
+            rawWord = currentWord,
+            languageCode = lang,
         )
     }
 
@@ -973,9 +977,13 @@ class NlpManager(
         if (!wordSuggestionsEnabled()) {
             return null
         }
+        val lang = subtypeManager.activeSubtype.primaryLocale.language
         return ImmediateAutocorrect.englishPhraseRepairCandidate(
             rawWord = currentWord,
-            languageCode = subtypeManager.activeSubtype.primaryLocale.language,
+            languageCode = lang,
+        ) ?: ImmediateAutocorrect.bilingualPhraseRepairCandidate(
+            rawWord = currentWord,
+            languageCode = lang,
         )
     }
 

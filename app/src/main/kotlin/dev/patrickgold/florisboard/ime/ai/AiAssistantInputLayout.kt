@@ -931,12 +931,12 @@ fun LiveAiSmartStrip(
         }
     }
 
-    val stripBg = Color(0xFF0F172A)
-    val pillBg = Color(0xFF1E293B)
+    val stripBg = Color(0xFF141414)
+    val pillBg = Color(0xFF242424)
     val accentTeal = Color(0xFF10B981)
     val accentBlue = Color(0xFF3B82F6)
     val accentAmber = Color(0xFFF59E0B)
-    val textWhite = Color(0xFFF8FAFC)
+    val textWhite = Color(0xFFF5F5F5)
 
     Row(
         modifier = modifier
@@ -947,6 +947,27 @@ fun LiveAiSmartStrip(
         horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // SwiftKey 4-Column Grid Menu Button (opens the exact SwiftKey Grid!)
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(pillBg)
+                .border(1.dp, Color(0xFF3A3A3A), RoundedCornerShape(12.dp))
+                .clickable {
+                    keyboardManager.activeState.isActionsOverflowVisible =
+                        !keyboardManager.activeState.isActionsOverflowVisible
+                }
+                .padding(horizontal = 8.dp, vertical = 3.dp),
+        ) {
+            val menuLabel = "⊞ Menu"
+            Text(
+                text = menuLabel,
+                color = textWhite,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+
         // 0. If a new 8002Keys cloud build update is available on GitHub, show 1-tap Auto-Update pill right on keyboard!
         val updateInfo = latestUpdate
         if (updateInfo != null && updateInfo.isUpdateAvailable) {
@@ -1120,12 +1141,11 @@ fun LiveAiSmartStrip(
             Text("⤢ Resize", color = textWhite, fontSize = 10.sp, fontWeight = FontWeight.Medium)
         }
 
-        // K. Provider Login Status / Settings Shortcut
-        val loginLabel = when {
-            vaultState.isGeminiReady && vaultState.isChatGptReady -> "Gemini+GPT ✓"
-            vaultState.isGeminiReady -> "Gemini ✓"
-            vaultState.isChatGptReady -> "ChatGPT ✓"
-            else -> "Login AI ⚙️"
+        // K. Provider Account Badge / Login Shortcut
+        val loginLabel = if (vaultState.hasAnyCloudProvider) {
+            "👤 ${vaultState.swiftKeyAccountBadgeLabel()} ✓"
+        } else {
+            "👤 Google / ChatGPT Login"
         }
         Box(
             modifier = Modifier
@@ -1136,7 +1156,7 @@ fun LiveAiSmartStrip(
         ) {
             Text(
                 text = loginLabel,
-                color = if (vaultState.hasAnyCloudProvider) Color(0xFF94A3B8) else accentAmber,
+                color = if (vaultState.hasAnyCloudProvider) accentTeal else accentAmber,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.SemiBold,
             )

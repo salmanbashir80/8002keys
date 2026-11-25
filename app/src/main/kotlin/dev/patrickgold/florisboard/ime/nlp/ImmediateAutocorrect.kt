@@ -449,4 +449,205 @@ internal object ImmediateAutocorrect {
         put("thankyoufor", safe("thank you for", "thank you for"))
         put("tothe", safe("to the", "to the"))
     }
+
+    /**
+     * High-confidence bilingual (English + Pakistani Roman Urdu) spacebar auto-corrections
+     * for common mobile fast-typing typos. Active for English ("en") and Urdu/Roman Urdu ("ur")
+     * subtypes without interfering with strict locale contraction unit tests.
+     */
+    fun bilingualTypoCandidate(
+        rawWord: String,
+        languageCode: String,
+    ): WordSuggestionCandidate? {
+        val lang = normalizeLanguageCode(languageCode)
+        if (lang != "en" && lang != "ur") return null
+        val typedWord = rawWord.trim().trim { char -> !char.isLetter() && char != '\'' }
+        if (typedWord.length < 2) return null
+        val letters = typedWord.filter { it.isLetter() }
+        if (letters.length > 1 && letters.all { it.isUpperCase() }) return null
+        val normalized = typedWord.lowercase()
+        val canonical = BilingualFastTypingCorrections[normalized] ?: return null
+        val finalText = if (canonical.any { it.isUpperCase() }) {
+            canonical
+        } else {
+            applyTypedCase(canonical, typedWord)
+        }
+        if (typedWord == finalText) return null
+        return WordSuggestionCandidate(
+            text = finalText,
+            confidence = 1.0,
+            isEligibleForAutoCommit = true,
+            isEligibleForUserRemoval = false,
+        )
+    }
+
+    fun bilingualPhraseRepairCandidate(
+        rawWord: String,
+        languageCode: String,
+    ): WordSuggestionCandidate? {
+        val lang = normalizeLanguageCode(languageCode)
+        if (lang != "en" && lang != "ur") return null
+        val typedWord = rawWord.trim().trim { char -> !char.isLetter() }
+        if (typedWord.length < 3) return null
+        val letters = typedWord.filter { it.isLetter() }
+        if (letters.length > 1 && letters.all { it.isUpperCase() }) return null
+        val normalized = typedWord.lowercase()
+        val canonical = BilingualPhraseRepairs[normalized] ?: return null
+        val finalText = applyTypedCase(canonical, typedWord)
+        if (typedWord == finalText) return null
+        return WordSuggestionCandidate(
+            text = finalText,
+            confidence = 1.0,
+            isEligibleForAutoCommit = true,
+            isEligibleForUserRemoval = false,
+        )
+    }
+
+    private val BilingualFastTypingCorrections: Map<String, String> = mapOf(
+        // Common English mobile typos
+        "teh" to "the",
+        "hte" to "the",
+        "thn" to "then",
+        "recieve" to "receive",
+        "beleive" to "believe",
+        "acheive" to "achieve",
+        "seperate" to "separate",
+        "definately" to "definitely",
+        "definatly" to "definitely",
+        "occured" to "occurred",
+        "untill" to "until",
+        "wierd" to "weird",
+        "freind" to "friend",
+        "becuase" to "because",
+        "beacuse" to "because",
+        "accomodate" to "accommodate",
+        "tommorow" to "tomorrow",
+        "tomorow" to "tomorrow",
+        "enviroment" to "environment",
+        "goverment" to "government",
+        "neccessary" to "necessary",
+        "necesary" to "necessary",
+        "succesful" to "successful",
+        "successfull" to "successful",
+        "settung" to "setting",
+        "seting" to "setting",
+        "setings" to "settings",
+        "coreect" to "correct",
+        "corret" to "correct",
+        "commect" to "connect",
+        "conect" to "connect",
+        "googlr" to "Google",
+        "gogle" to "Google",
+        "accoutn" to "account",
+        "acount" to "account",
+        "chargpt" to "ChatGPT",
+        "chatgtp" to "ChatGPT",
+        "chatgpt" to "ChatGPT",
+        "demini" to "Gemini",
+        "gemni" to "Gemini",
+        "gemini" to "Gemini",
+        "subscriton" to "subscription",
+        "subscrption" to "subscription",
+        "studeo" to "Studio",
+        "studoe" to "Studio",
+        "udpate" to "update",
+        "udpte" to "update",
+        "pdatet" to "update",
+        "implwmr" to "implement",
+        "implemnt" to "implement",
+        "featire" to "feature",
+        "feture" to "feature",
+        "grammer" to "grammar",
+        "grmammer" to "grammar",
+        "memery" to "memory",
+        "memry" to "memory",
+        "passowrd" to "password",
+        "pasword" to "password",
+        "keybaord" to "keyboard",
+        "keybord" to "keyboard",
+        "andriod" to "Android",
+        "whatsap" to "WhatsApp",
+        // Common Pakistani Roman Urdu fast-typing slips & shorthands
+        "mjy" to "mujhe",
+        "mje" to "mujhe",
+        "mjhy" to "mujhe",
+        "tmy" to "tumhein",
+        "apko" to "aapko",
+        "apka" to "aapka",
+        "apki" to "aapki",
+        "chaye" to "chahiye",
+        "chahye" to "chahiye",
+        "chaiye" to "chahiye",
+        "kaor" to "karo",
+        "kro" to "karo",
+        "krna" to "karna",
+        "krni" to "karni",
+        "krny" to "karne",
+        "krdo" to "kar do",
+        "krdy" to "kar de",
+        "krain" to "karein",
+        "krein" to "karein",
+        "kren" to "karein",
+        "kron" to "karoon",
+        "krun" to "karoon",
+        "akrwao" to "karwao",
+        "krwao" to "karwao",
+        "ayys" to "aise",
+        "aysy" to "aise",
+        "aisy" to "aise",
+        "jesy" to "jaise",
+        "jese" to "jaise",
+        "meon" to "mein",
+        "aath" to "saath",
+        "sath" to "saath",
+        "amsla" to "masla",
+        "msla" to "masla",
+        "tkay" to "taake",
+        "taky" to "taake",
+        "isku" to "isko",
+        "usku" to "usko",
+        "unku" to "unko",
+        "dubara" to "dobara",
+        "leay" to "liye",
+        "liay" to "liye",
+        "gya" to "gaya",
+        "gyi" to "gayi",
+        "gye" to "gaye",
+        "hoa" to "hua",
+        "hoi" to "hui",
+        "hoay" to "hue",
+        "nai" to "nahi",
+        "nhi" to "nahi",
+        "agr" to "agar",
+        "mgr" to "magar",
+        "lkn" to "lekin",
+        "bht" to "bohat",
+        "boht" to "bohat",
+        "shukria" to "shukriya",
+        "shukrya" to "shukriya",
+        "inshallah" to "InshaAllah",
+        "inshaallah" to "InshaAllah",
+        "alhamdulilah" to "Alhamdulillah",
+        "alhamdulillah" to "Alhamdulillah",
+        "mashallah" to "MashaAllah",
+        "mashaallah" to "MashaAllah",
+    )
+
+    private val BilingualPhraseRepairs: Map<String, String> = mapOf(
+        "ismein" to "is mein",
+        "usmein" to "us mein",
+        "jesyis" to "jaise is",
+        "kaypdatet" to "ke update",
+        "grmammerku" to "grammar ko",
+        "donolgin" to "dono login",
+        "krdo" to "kar do",
+        "krdia" to "kar diya",
+        "krdiya" to "kar diya",
+        "hogya" to "ho gaya",
+        "hogaya" to "ho gaya",
+        "assaalamualaikum" to "Assalamu Alaikum",
+        "assalamualaikum" to "Assalamu Alaikum",
+        "walaikumsalam" to "Wa Alaikum Assalam",
+    )
 }
+

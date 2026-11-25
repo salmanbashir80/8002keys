@@ -107,6 +107,32 @@ data class AiVaultState(
             else -> "Smart Local Engine (Login Gemini / ChatGPT for Cloud AI)"
         }
     }
+
+    /**
+     * Formats the connected Google or ChatGPT account email in SwiftKey grid style
+     * (e.g. "sal...@live.com" or "sal...@gmail.com").
+     */
+    fun swiftKeyAccountBadgeLabel(): String {
+        val rawEmail = when {
+            isGeminiReady && geminiAccountEmail.contains("@") -> geminiAccountEmail.trim()
+            isChatGptReady && chatGptAccountEmail.contains("@") -> chatGptAccountEmail.trim()
+            isGeminiReady && geminiAccountEmail.isNotBlank() -> geminiAccountEmail.trim()
+            isChatGptReady && chatGptAccountEmail.isNotBlank() -> chatGptAccountEmail.trim()
+            isGeminiReady -> "Google ✓"
+            isChatGptReady -> "ChatGPT ✓"
+            else -> "Google / GPT"
+        }
+        if (rawEmail.contains("@")) {
+            val local = rawEmail.substringBefore("@")
+            val domain = rawEmail.substringAfter("@")
+            return if (local.length > 4) {
+                "${local.take(3)}...@$domain"
+            } else {
+                "$local@$domain"
+            }
+        }
+        return rawEmail.take(14)
+    }
 }
 
 /**
@@ -137,6 +163,13 @@ object AiMemoryVault {
 
     private val _state = MutableStateFlow(AiVaultState())
     val state: StateFlow<AiVaultState> = _state.asStateFlow()
+
+    private val _pendingLoginProvider = MutableStateFlow<AiProviderType?>(null)
+    val pendingLoginProvider: StateFlow<AiProviderType?> = _pendingLoginProvider.asStateFlow()
+
+    fun requestDirectLoginModal(provider: AiProviderType?) {
+        _pendingLoginProvider.value = provider
+    }
 
     @Volatile
     private var isInitialized = false

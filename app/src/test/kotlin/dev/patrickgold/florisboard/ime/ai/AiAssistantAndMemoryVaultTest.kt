@@ -173,5 +173,24 @@ class AiAssistantAndMemoryVaultTest : FunSpec({
         upToDate shouldNotBe null
         upToDate!!.isUpdateAvailable shouldBe false
     }
+
+    test("SwiftKey account badge formats connected email like sal...@live.com and bilingual spacebar auto-correct fixes typos") {
+        val state = AiVaultState(
+            geminiConnected = true,
+            geminiAccountEmail = "salmanbashir80@live.com",
+            geminiApiKey = "GOOGLE_WEB_SESSION:salmanbashir80@live.com",
+        )
+        state.swiftKeyAccountBadgeLabel() shouldBe "sal...@live.com"
+
+        dev.patrickgold.florisboard.ime.nlp.ImmediateAutocorrect.bilingualTypoCandidate("settung", "en")?.text shouldBe "setting"
+        dev.patrickgold.florisboard.ime.nlp.ImmediateAutocorrect.bilingualTypoCandidate("googlr", "en")?.text shouldBe "Google"
+        dev.patrickgold.florisboard.ime.nlp.ImmediateAutocorrect.bilingualTypoCandidate("accoutn", "en")?.text shouldBe "account"
+        dev.patrickgold.florisboard.ime.nlp.ImmediateAutocorrect.bilingualTypoCandidate("chargpt", "en")?.text shouldBe "ChatGPT"
+        dev.patrickgold.florisboard.ime.nlp.ImmediateAutocorrect.bilingualTypoCandidate("subscriton", "en")?.text shouldBe "subscription"
+        dev.patrickgold.florisboard.ime.nlp.ImmediateAutocorrect.bilingualTypoCandidate("chaye", "ur")?.text shouldBe "chahiye"
+        dev.patrickgold.florisboard.ime.nlp.ImmediateAutocorrect.bilingualTypoCandidate("kaor", "ur")?.text shouldBe "karo"
+        dev.patrickgold.florisboard.ime.nlp.ImmediateAutocorrect.bilingualPhraseRepairCandidate("jesyis", "en")?.text shouldBe "jaise is"
+    }
 })
+
 

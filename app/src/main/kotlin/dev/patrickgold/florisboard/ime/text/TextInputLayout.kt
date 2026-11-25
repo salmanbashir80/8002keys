@@ -74,7 +74,7 @@ fun TextInputLayout(
                 onClear = { keyboardManager.textEntry.clear() },
                 onDone = { keyboardManager.finishTextEntry(submitted = true) },
             )
-        } else {
+        } else if (!state.isActionsOverflowVisible) {
             dev.patrickgold.florisboard.ime.ai.LiveAiSmartStrip()
             Smartbar()
         }
