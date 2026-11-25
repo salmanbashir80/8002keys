@@ -310,6 +310,25 @@ object LocalGrammarAndRewriteEngine {
         "akrwao" to "karwao",
         "krwao" to "karwao",
         "kron" to "karoon",
+        "kbi" to "kabhi",
+        "kbhi" to "kabhi",
+        "bi" to "bhi",
+        "souchna" to "sochna",
+        "soucha" to "socha",
+        "ana" to "aana",
+        "akaili" to "akeli",
+        "achh" to "acha",
+        "nichy" to "neeche",
+        "phr" to "phir",
+        "aphr" to "phir",
+        "bta" to "bata",
+        "dnea" to "dena",
+        "dne" to "dena",
+        "islu" to "isko",
+        "publsih" to "publish",
+        "choty" to "chote",
+        "chatgot" to "ChatGPT",
+        "grammly" to "Grammarly",
     )
 
     private data class PhraseRule(
@@ -970,6 +989,18 @@ object CloudAiClient {
                         if (key.startsWith(GOOGLE_WEB_SESSION_PREFIX)) {
                             val label = "Google Account (${vault.geminiAccountEmail.ifBlank { "Google Gemini" }})"
                             activeWebSessionLabel = label
+                            val localBase = LocalGrammarAndRewriteEngine.executeLocalFallback(task, trimmedInput, trimmedCustom)
+                            val neuralRes = runCatching {
+                                executeDedicatedNeuralTask(task, trimmedInput, localBase)
+                            }.getOrNull()?.takeIf { it.isNotBlank() }
+                            if (neuralRes != null) {
+                                onSuccessfulCloudExecution(context, task, trimmedInput, neuralRes, label, isIncognito)
+                                return AiExecutionResult(
+                                    outputText = neuralRes,
+                                    providerUsed = label,
+                                    usedCloud = true,
+                                )
+                            }
                             val webCloudOut = runCatching {
                                 callZeroKeyCloudGateway(
                                     model = "openai",
@@ -1009,6 +1040,18 @@ object CloudAiClient {
                             val label = "ChatGPT Subscription (${vault.chatGptAccountEmail.ifBlank { "ChatGPT Plus" }})"
                             if (activeWebSessionLabel == null) {
                                 activeWebSessionLabel = label
+                            }
+                            val localBase = LocalGrammarAndRewriteEngine.executeLocalFallback(task, trimmedInput, trimmedCustom)
+                            val neuralRes = runCatching {
+                                executeDedicatedNeuralTask(task, trimmedInput, localBase)
+                            }.getOrNull()?.takeIf { it.isNotBlank() }
+                            if (neuralRes != null) {
+                                onSuccessfulCloudExecution(context, task, trimmedInput, neuralRes, label, isIncognito)
+                                return AiExecutionResult(
+                                    outputText = neuralRes,
+                                    providerUsed = label,
+                                    usedCloud = true,
+                                )
                             }
                             val webCloudOut = runCatching {
                                 callZeroKeyCloudGateway(
@@ -1052,29 +1095,222 @@ object CloudAiClient {
         }
 
         val localOut = LocalGrammarAndRewriteEngine.executeLocalFallback(task, trimmedInput, trimmedCustom)
-        if (activeWebSessionLabel != null) {
-            onSuccessfulCloudExecution(context, task, trimmedInput, localOut, activeWebSessionLabel!!, isIncognito)
+        val neuralOut = runCatching {
+            executeDedicatedNeuralTask(task, trimmedInput, localOut)
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+
+        val finalOutput = neuralOut ?: localOut
+        val providerLabel = activeWebSessionLabel ?: if (neuralOut != null) {
+            "8002Keys Neural AI (Google & Grammar Engine)"
+        } else {
+            "8002Keys Local AI Engine"
+        }
+
+        if (activeWebSessionLabel != null || neuralOut != null) {
+            onSuccessfulCloudExecution(context, task, trimmedInput, finalOutput, providerLabel, isIncognito)
             return AiExecutionResult(
-                outputText = localOut,
-                providerUsed = activeWebSessionLabel!!,
+                outputText = finalOutput,
+                providerUsed = providerLabel,
                 usedCloud = true,
                 warningMessage = null,
             )
         }
 
-        val warning = when {
-            !vault.hasAnyCloudProvider ->
-                "Using Local AI Grammar Engine. Tap 'Login / Memory ⚙️' to connect Google Gemini or ChatGPT."
-            lastCloudError != null ->
-                "Cloud fallback ($lastCloudError) — used Local AI Engine."
-            else -> null
+        val warning = if (lastCloudError != null) {
+            "Cloud fallback ($lastCloudError) — used Local AI Engine."
+        } else {
+            null
         }
         return AiExecutionResult(
-            outputText = localOut,
-            providerUsed = "8002Keys Local AI Engine",
+            outputText = finalOutput,
+            providerUsed = providerLabel,
             usedCloud = false,
             warningMessage = warning,
         )
+    }
+
+    private val romanUrduIndicatorWords = setOf(
+        "hai", "hay", "hain", "han", "nahi", "nhi", "nai", "karo", "kro", "karna", "krna",
+        "mujhe", "mjy", "aap", "ap", "tum", "kya", "kaise", "kesay", "milna", "aana", "ana",
+        "bhi", "bi", "kabhi", "kbi", "sochna", "souchna", "ainda", "acha", "achh", "akeli",
+        "akaili", "mein", "main", "se", "sy", "ko", "ku", "de", "dy", "dena", "liye", "leay",
+        "gaya", "gya", "hua", "hoa", "agar", "agr", "dobara", "dubara", "chahiye", "chahye",
+        "chaye", "masla", "amsla", "taake", "tkay", "sahi", "sai", "bohat", "bht", "neeche",
+        "nichy", "yahan", "kahan", "likha", "sab", "sb", "phir", "phr", "bata", "bta",
+    )
+
+    private fun looksLikeRomanUrduText(text: String): Boolean {
+        val tokens = Regex("""[A-Za-z]+""").findAll(text).map { it.value.lowercase() }.toList()
+        if (tokens.isEmpty()) return false
+        val hits = tokens.count { it in romanUrduIndicatorWords }
+        return hits >= 2 || (tokens.size <= 3 && hits >= 1)
+    }
+
+    private fun containsUrduArabicScript(text: String): Boolean {
+        return text.any { ch -> ch in '\u0600'..'\u06FF' }
+    }
+
+    private fun executeDedicatedNeuralTask(
+        task: AiWritingTask,
+        rawInput: String,
+        localFallbackOutput: String,
+    ): String? {
+        return when (task) {
+            AiWritingTask.TO_URDU_SCRIPT -> {
+                callGoogleNeuralTranslateToUrdu(rawInput)
+            }
+            AiWritingTask.ROMAN_URDU_TO_ENGLISH -> {
+                callGoogleNeuralTranslateToEnglish(rawInput)
+            }
+            AiWritingTask.ENGLISH_TO_ROMAN_URDU -> {
+                callGoogleNeuralEnglishToRomanUrdu(rawInput)
+            }
+            AiWritingTask.FIX_GRAMMAR_SPELLING,
+            AiWritingTask.IMPROVE_WRITING,
+            AiWritingTask.TONE_PROFESSIONAL,
+            AiWritingTask.TONE_CASUAL -> {
+                val baseFixed = LocalGrammarAndRewriteEngine.fixGrammarAndSpelling(rawInput)
+                if (looksLikeRomanUrduText(baseFixed)) {
+                    baseFixed
+                } else {
+                    val ltFixed = runCatching { callLanguageToolGrammarCheck(baseFixed) }.getOrNull()
+                    if (!ltFixed.isNullOrBlank()) ltFixed else baseFixed
+                }
+            }
+            else -> localFallbackOutput
+        }
+    }
+
+    private fun callGoogleNeuralTranslateToUrdu(inputText: String): String {
+        val cleaned = if (looksLikeRomanUrduText(inputText)) {
+            LocalGrammarAndRewriteEngine.fixGrammarAndSpelling(inputText)
+                .replace(Regex("""\bb\b""", RegexOption.IGNORE_CASE), "bhi")
+                .replace(Regex("""\bma\b""", RegexOption.IGNORE_CASE), "mein")
+        } else {
+            inputText.trim()
+        }
+        val sourceLang = if (looksLikeRomanUrduText(cleaned)) "hi" else "auto"
+        val encodedQ = java.net.URLEncoder.encode(cleaned, "UTF-8")
+        val url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=$sourceLang&tl=ur&dt=t&q=$encodedQ"
+        val raw = getHttpText(url)
+        val root = json.parseToJsonElement(raw) as? JsonArray ?: error("Invalid GTX response")
+        val sentences = root.firstOrNull() as? JsonArray ?: error("Missing GTX sentences")
+        val out = buildString {
+            for (el in sentences) {
+                val arr = el as? JsonArray ?: continue
+                val piece = (arr.firstOrNull() as? JsonPrimitive)?.contentOrNull
+                if (!piece.isNullOrEmpty()) append(piece)
+            }
+        }.trim()
+        if (out.isEmpty()) error("Empty Urdu translation")
+        return out
+    }
+
+    private fun callGoogleNeuralTranslateToEnglish(inputText: String): String {
+        val intermediateUrdu = if (containsUrduArabicScript(inputText)) {
+            inputText.trim()
+        } else if (looksLikeRomanUrduText(inputText)) {
+            callGoogleNeuralTranslateToUrdu(inputText)
+        } else {
+            inputText.trim()
+        }
+        val sourceLang = if (containsUrduArabicScript(intermediateUrdu)) "ur" else "auto"
+        val encodedQ = java.net.URLEncoder.encode(intermediateUrdu, "UTF-8")
+        val url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=$sourceLang&tl=en&dt=t&q=$encodedQ"
+        val raw = getHttpText(url)
+        val root = json.parseToJsonElement(raw) as? JsonArray ?: error("Invalid GTX response")
+        val sentences = root.firstOrNull() as? JsonArray ?: error("Missing GTX sentences")
+        val out = buildString {
+            for (el in sentences) {
+                val arr = el as? JsonArray ?: continue
+                val piece = (arr.firstOrNull() as? JsonPrimitive)?.contentOrNull
+                if (!piece.isNullOrEmpty()) append(piece)
+            }
+        }.trim()
+        if (out.isEmpty()) error("Empty English translation")
+        return out
+    }
+
+    private fun callGoogleNeuralEnglishToRomanUrdu(inputText: String): String {
+        val encodedQ = java.net.URLEncoder.encode(inputText.trim(), "UTF-8")
+        val url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=hi&dt=t&dt=rm&q=$encodedQ"
+        val raw = getHttpText(url)
+        val root = json.parseToJsonElement(raw) as? JsonArray ?: error("Invalid GTX response")
+        val sentences = root.firstOrNull() as? JsonArray ?: error("Missing GTX sentences")
+        var romanized = ""
+        for (el in sentences) {
+            val arr = el as? JsonArray ?: continue
+            val candidate = (arr.getOrNull(2) as? JsonPrimitive)?.contentOrNull
+                ?: (arr.getOrNull(3) as? JsonPrimitive)?.contentOrNull
+            if (!candidate.isNullOrBlank()) {
+                romanized += "$candidate "
+            }
+        }
+        val cleanRoman = romanized.trim()
+            .replace(Regex("""\bhun\b""", RegexOption.IGNORE_CASE), "hoon")
+            .replace(Regex("""\bmain\b""", RegexOption.IGNORE_CASE), "Main")
+        if (cleanRoman.isNotEmpty()) {
+            return cleanRoman.replaceFirstChar { it.uppercase() }
+        }
+        return LocalGrammarAndRewriteEngine.executeLocalFallback(AiWritingTask.ENGLISH_TO_ROMAN_URDU, inputText)
+    }
+
+    private fun callLanguageToolGrammarCheck(inputText: String): String {
+        val body = "language=en-US&text=" + java.net.URLEncoder.encode(inputText, "UTF-8")
+        val responseBody = postJson(
+            url = "https://api.languagetool.org/v2/check",
+            headers = mapOf(
+                "Content-Type" to "application/x-www-form-urlencoded; charset=utf-8",
+                "Accept" to "application/json",
+            ),
+            body = body,
+        )
+        val root = json.parseToJsonElement(responseBody).jsonObject
+        val matches = root["matches"] as? JsonArray ?: return inputText
+        if (matches.isEmpty()) return inputText
+
+        data class EditSpan(val offset: Int, val length: Int, val replacement: String)
+        val edits = matches.mapNotNull { el ->
+            val obj = el.jsonObject
+            val offset = obj["offset"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: return@mapNotNull null
+            val length = obj["length"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: return@mapNotNull null
+            val replacements = obj["replacements"] as? JsonArray ?: return@mapNotNull null
+            val firstRepl = replacements.firstOrNull()?.jsonObject?.get("value")?.jsonPrimitive?.contentOrNull
+                ?: return@mapNotNull null
+            EditSpan(offset, length, firstRepl)
+        }.sortedByDescending { it.offset }
+
+        val sb = StringBuilder(inputText)
+        var lastStart = Int.MAX_VALUE
+        for (edit in edits) {
+            val end = edit.offset + edit.length
+            if (edit.offset >= 0 && end <= sb.length && end <= lastStart) {
+                sb.replace(edit.offset, end, edit.replacement)
+                lastStart = edit.offset
+            }
+        }
+        return sb.toString()
+    }
+
+    private fun getHttpText(url: String): String {
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = CONNECT_TIMEOUT_MS
+            readTimeout = READ_TIMEOUT_MS
+            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/131.0.0.0 Mobile Safari/537.36")
+            setRequestProperty("Accept", "application/json, text/plain, */*")
+        }
+        return try {
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val text = stream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
+            if (code !in 200..299) {
+                throw IllegalStateException("HTTP $code")
+            }
+            text
+        } finally {
+            conn.disconnect()
+        }
     }
 
     private fun onSuccessfulCloudExecution(

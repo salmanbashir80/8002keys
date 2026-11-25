@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2026 8002Keys Contributors
+ * Copyright (C) 2026 Salman Bashir (8002Keys)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,46 +19,44 @@ package dev.patrickgold.florisboard.app.settings.ai
 import android.accounts.AccountManager
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.view.MotionEvent
+import android.view.View
 import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.OpenInBrowser
-import androidx.compose.material.icons.filled.Restore
-import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -70,88 +68,96 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import dev.patrickgold.florisboard.FlorisImeService
-import dev.patrickgold.florisboard.app.FlorisPreferenceStore
+import dev.patrickgold.florisboard.app.update.AppUpdateBannerCard
+import dev.patrickgold.florisboard.app.update.AppUpdateHost
 import dev.patrickgold.florisboard.ime.ai.AiMemoryVault
 import dev.patrickgold.florisboard.ime.ai.AiProviderType
 import dev.patrickgold.florisboard.ime.ai.AiWritingTask
 import dev.patrickgold.florisboard.ime.ai.CloudAiClient
 import dev.patrickgold.florisboard.lib.compose.FlorisScreen
-import dev.patrickgold.jetpref.datastore.model.collectAsState
 import kotlinx.coroutines.launch
 import org.florisboard.lib.android.showLongToastSync
 import org.florisboard.lib.android.showShortToastSync
 
-private fun readSystemClipboardText(context: Context): String {
-    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-    val item = cm?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
-    return item?.coerceToText(context)?.toString()?.trim().orEmpty()
-}
-
-private fun writeSystemClipboardText(context: Context, label: String, text: String) {
-    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-    cm?.setPrimaryClip(ClipData.newPlainText(label, text))
-}
-
-private fun openBrowserUrl(context: Context, url: String) {
+private fun openExternalUrl(context: Context, url: String) {
     runCatching {
         context.startActivity(
             Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
+            },
         )
     }.onFailure {
-        context.showShortToastSync("Unable to open URL: $url")
+        context.showShortToastSync("Unable to open browser")
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AiAssistantScreen() = FlorisScreen {
-    title = "AI Login, Grammar & Memory"
+    title = "Google & ChatGPT AI Login"
     previewFieldVisible = true
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val vault by AiMemoryVault.state.collectAsState()
-
-    var geminiEmail by remember(vault.geminiAccountEmail) { mutableStateOf(vault.geminiAccountEmail) }
-    var geminiKey by remember(vault.geminiApiKey) { mutableStateOf(vault.geminiApiKey) }
-    var geminiModel by remember(vault.geminiModel) { mutableStateOf(vault.geminiModel) }
-    var showGeminiKey by remember { mutableStateOf(false) }
-    var geminiStatusMessage by remember { mutableStateOf<String?>(null) }
-    var isTestingGemini by remember { mutableStateOf(false) }
-
-    var chatGptEmail by remember(vault.chatGptAccountEmail) { mutableStateOf(vault.chatGptAccountEmail) }
-    var chatGptKey by remember(vault.chatGptApiKey) { mutableStateOf(vault.chatGptApiKey) }
-    var chatGptModel by remember(vault.chatGptModel) { mutableStateOf(vault.chatGptModel) }
-    var chatGptBaseUrl by remember(vault.chatGptBaseUrl) { mutableStateOf(vault.chatGptBaseUrl) }
-    var showChatGptKey by remember { mutableStateOf(false) }
-    var chatGptStatusMessage by remember { mutableStateOf<String?>(null) }
-    var isTestingChatGpt by remember { mutableStateOf(false) }
-
-    var styleMemoryInput by remember(vault.writingStyleMemory) { mutableStateOf(vault.writingStyleMemory) }
-    var customRuleOrigin by remember { mutableStateOf("") }
-    var customRulePreferred by remember { mutableStateOf("") }
-    var memoryStatusBanner by remember { mutableStateOf<String?>(null) }
-
-    var sampleInputText by remember {
-        mutableStateOf("mjy ismein gemini aur chatgpt sy spell check aur ai grammer correct krna hay")
-    }
-    var sampleResultText by remember { mutableStateOf<String?>(null) }
-    var isRunningSample by remember { mutableStateOf(false) }
-
-    var clipboardDetected by remember { mutableStateOf<Pair<AiProviderType, String>?>(null) }
-    var inAppLoginProvider by remember { mutableStateOf<AiProviderType?>(null) }
     val pendingLogin by AiMemoryVault.pendingLoginProvider.collectAsState()
+
+    var geminiEmail by remember(vault.geminiAccountEmail) {
+        mutableStateOf(vault.geminiAccountEmail)
+    }
+    var geminiStatus by remember { mutableStateOf<String?>(null) }
+
+    var chatGptEmail by remember(vault.chatGptAccountEmail) {
+        mutableStateOf(vault.chatGptAccountEmail)
+    }
+    var chatGptStatus by remember { mutableStateOf<String?>(null) }
+
+    var inlineWebViewProvider by remember { mutableStateOf<AiProviderType?>(null) }
+
+    var testInput by remember {
+        mutableStateOf("I am coming to Lahore tomorrow to meet you")
+    }
+    var testOutput by remember { mutableStateOf<String?>(null) }
+    var isTestingTask by remember { mutableStateOf(false) }
+
+    fun connectGoogleAccountNow(emailInput: String) {
+        val cleanEmail = emailInput.trim().ifBlank { "Google Account" }
+        val token = "${CloudAiClient.GOOGLE_WEB_SESSION_PREFIX}$cleanEmail"
+        geminiEmail = cleanEmail
+        AiMemoryVault.connectGemini(
+            context = context,
+            accountEmail = cleanEmail,
+            apiKey = token,
+            model = vault.geminiModel,
+        )
+        geminiStatus = "✓ Google Account Connected ($cleanEmail)"
+        inlineWebViewProvider = null
+        context.showLongToastSync("Google Account ($cleanEmail) connected!")
+    }
+
+    fun connectChatGptAccountNow(emailInput: String) {
+        val cleanEmail = emailInput.trim().ifBlank {
+            geminiEmail.trim().ifBlank { "ChatGPT Plus Subscription" }
+        }
+        val token = "${CloudAiClient.CHATGPT_WEB_SESSION_PREFIX}$cleanEmail"
+        chatGptEmail = cleanEmail
+        AiMemoryVault.connectChatGpt(
+            context = context,
+            accountEmail = cleanEmail,
+            apiKey = token,
+            model = vault.chatGptModel,
+            baseUrl = vault.chatGptBaseUrl,
+        )
+        chatGptStatus = "✓ ChatGPT Subscription Attached ($cleanEmail)"
+        inlineWebViewProvider = null
+        context.showLongToastSync("ChatGPT Subscription ($cleanEmail) attached!")
+    }
 
     val googleAccountPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -159,18 +165,7 @@ fun AiAssistantScreen() = FlorisScreen {
         if (result.resultCode == Activity.RESULT_OK) {
             val pickedEmail = result.data?.getStringExtra(AccountManager.KEY_ACCOUNT_NAME)?.trim().orEmpty()
             if (pickedEmail.isNotEmpty()) {
-                val sessionToken = "${CloudAiClient.GOOGLE_WEB_SESSION_PREFIX}$pickedEmail"
-                geminiEmail = pickedEmail
-                geminiKey = sessionToken
-                AiMemoryVault.connectGemini(
-                    context = context,
-                    accountEmail = pickedEmail,
-                    apiKey = sessionToken,
-                    model = geminiModel,
-                )
-                geminiStatusMessage = "Google Account ($pickedEmail) Connected & Saved ✓"
-                inAppLoginProvider = null
-                context.showLongToastSync("Google Account ($pickedEmail) connected!")
+                connectGoogleAccountNow(pickedEmail)
             }
         }
     }
@@ -188,827 +183,544 @@ fun AiAssistantScreen() = FlorisScreen {
             )
             googleAccountPickerLauncher.launch(intent)
         }.onFailure {
-            inAppLoginProvider = AiProviderType.GEMINI
+            inlineWebViewProvider = AiProviderType.GEMINI
         }
     }
 
     LaunchedEffect(Unit) {
         AiMemoryVault.initialize(context)
-        val clip = readSystemClipboardText(context)
-        clipboardDetected = AiMemoryVault.detectApiKeyInText(clip)
     }
 
     LaunchedEffect(pendingLogin) {
         val target = pendingLogin
         if (target != null) {
-            inAppLoginProvider = target
             AiMemoryVault.requestDirectLoginModal(null)
+            if (target == AiProviderType.GEMINI) {
+                launchSystemGoogleAccountPicker()
+            } else {
+                inlineWebViewProvider = target
+            }
         }
     }
 
-    val activeLoginModal = inAppLoginProvider
-    if (activeLoginModal != null) {
-        InAppAiLoginWebViewDialog(
-            provider = activeLoginModal,
-            onKeyCaptured = { capturedProvider, capturedKey, capturedEmail ->
-                if (capturedProvider == AiProviderType.GEMINI) {
-                    geminiKey = capturedKey
-                    if (capturedEmail.isNotBlank()) geminiEmail = capturedEmail
-                    AiMemoryVault.connectGemini(
-                        context = context,
-                        accountEmail = capturedEmail.ifBlank { geminiEmail.ifBlank { "Google Gemini Account" } },
-                        apiKey = capturedKey,
-                        model = geminiModel,
-                    )
-                    geminiStatusMessage = "Google Gemini Logged In & Saved to Persistent Memory ✓"
-                } else {
-                    chatGptKey = capturedKey
-                    if (capturedEmail.isNotBlank()) chatGptEmail = capturedEmail
-                    AiMemoryVault.connectChatGpt(
-                        context = context,
-                        accountEmail = capturedEmail.ifBlank { chatGptEmail.ifBlank { "OpenAI ChatGPT Account" } },
-                        apiKey = capturedKey,
-                        model = chatGptModel,
-                        baseUrl = chatGptBaseUrl,
-                    )
-                    chatGptStatusMessage = "OpenAI ChatGPT Logged In & Saved to Persistent Memory ✓"
-                }
-                inAppLoginProvider = null
-                context.showLongToastSync("${capturedProvider.displayName} logged in & saved to phone memory!")
-            },
-            onDismiss = {
-                val clip = readSystemClipboardText(context)
-                clipboardDetected = AiMemoryVault.detectApiKeyInText(clip)
-                inAppLoginProvider = null
-            },
-        )
-    }
+    val emeraldGreen = Color(0xFF059669)
+    val royalBlue = Color(0xFF2563EB)
+    val deepIndigo = Color(0xFF4F46E5)
 
     content {
-        dev.patrickgold.florisboard.app.update.AppUpdateHost(autoCheckOnMount = true)
-        dev.patrickgold.florisboard.app.update.AppUpdateBannerCard()
+        AppUpdateHost(autoCheckOnMount = true)
+        AppUpdateBannerCard()
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // 0. Overview & Clipboard Auto-Detector Card
+            // Optional Inline Login WebView (rendered directly in Activity window so keyboard ALWAYS opens!)
+            val activeWebProvider = inlineWebViewProvider
+            if (activeWebProvider != null) {
+                InlineAccountSignInCard(
+                    provider = activeWebProvider,
+                    onAccountConnected = { prov, email ->
+                        if (prov == AiProviderType.GEMINI) {
+                            connectGoogleAccountNow(email)
+                        } else {
+                            connectChatGptAccountNow(email)
+                        }
+                    },
+                    onClose = { inlineWebViewProvider = null },
+                )
+            }
+
+            // CARD 1: GOOGLE ACCOUNT LOGIN (SIMPLE, LARGE FONT, 1-TAP)
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        width = 1.5.dp,
+                        color = if (vault.isGeminiReady) emeraldGreen else royalBlue,
+                        shape = RoundedCornerShape(16.dp),
+                    ),
+                shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                 ),
             ) {
                 Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = "Active AI Engine: ${vault.activeProviderSummary()}",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    }
-                    Text(
-                        text = "Connect both Google Gemini and OpenAI ChatGPT below. Your login accounts, writing style, and learned corrections automatically persist across app reinstalls in phone storage (Download/8002Keys).",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-
-                    val detected = clipboardDetected
-                    if (detected != null) {
-                        val (prov, key) = detected
-                        val isNew = (prov == AiProviderType.GEMINI && key != vault.geminiApiKey) ||
-                            (prov == AiProviderType.CHATGPT && key != vault.chatGptApiKey)
-                        if (isNew) {
-                            Spacer(Modifier.height(4.dp))
-                            Button(
-                                onClick = {
-                                    if (prov == AiProviderType.GEMINI) {
-                                        geminiKey = key
-                                        AiMemoryVault.connectGemini(
-                                            context = context,
-                                            accountEmail = geminiEmail.ifBlank { "Google Gemini Account" },
-                                            apiKey = key,
-                                            model = geminiModel,
-                                        )
-                                        geminiStatusMessage = "Connected Gemini key from clipboard & saved to persistent memory!"
-                                    } else {
-                                        chatGptKey = key
-                                        AiMemoryVault.connectChatGpt(
-                                            context = context,
-                                            accountEmail = chatGptEmail.ifBlank { "OpenAI ChatGPT Account" },
-                                            apiKey = key,
-                                            model = chatGptModel,
-                                            baseUrl = chatGptBaseUrl,
-                                        )
-                                        chatGptStatusMessage = "Connected ChatGPT key from clipboard & saved to persistent memory!"
-                                    }
-                                    context.showShortToastSync("${prov.displayName} connected & saved!")
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Icon(Icons.Default.CheckCircle, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
-                                Text("1-Tap Connect Detected ${prov.displayName} Key from Clipboard")
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 1. Direct Google Account Login (Gemini) — No AI Studio
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            text = "1. Google Account Login (Gemini)",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        val googleBadgeText = if (vault.isGeminiReady) {
-                            "Connected (${vault.swiftKeyAccountBadgeLabel()}) ✓"
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AccountCircle,
+                                contentDescription = null,
+                                tint = if (vault.isGeminiReady) emeraldGreen else royalBlue,
+                                modifier = Modifier.size(28.dp),
+                            )
+                            val card1Title = "1. Google Account"
+                            Text(
+                                text = card1Title,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                            )
+                        }
+                        val statusBadge = if (vault.isGeminiReady) {
+                            "✓ Connected"
                         } else {
                             "Not Connected"
                         }
                         Text(
-                            text = googleBadgeText,
-                            color = if (vault.isGeminiReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.labelLarge,
+                            text = statusBadge,
+                            color = if (vault.isGeminiReady) emeraldGreen else MaterialTheme.colorScheme.error,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                         )
                     }
-                    Text(
-                        text = "Connect directly with your Google Account (no AI Studio required). Pick your phone's Google Account in 1 tap or sign in via Google Accounts.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Button(
-                        onClick = { launchSystemGoogleAccountPicker() },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        val pickPhoneLabel = "1-Tap Connect Phone's Google Account"
-                        Text(pickPhoneLabel)
-                    }
-                    OutlinedButton(
-                        onClick = { inAppLoginProvider = AiProviderType.GEMINI },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        val webGoogleLabel = "Sign In with Google Account (Gemini Web)"
-                        Text(webGoogleLabel)
+
+                    if (vault.isGeminiReady && vault.geminiAccountEmail.isNotBlank()) {
+                        val activeEmailLine = "Logged in as: ${vault.geminiAccountEmail}"
+                        Text(
+                            text = activeEmailLine,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = emeraldGreen,
+                        )
                     }
 
+                    // 1-Tap Phone Google Account Chooser Button
+                    Button(
+                        onClick = { launchSystemGoogleAccountPicker() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = royalBlue),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        val btn1Text = "1-Tap Choose Phone's Google Account"
+                        Text(
+                            text = btn1Text,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+
+                    // Direct Email Input Box (Right on main screen so keyboard opens immediately!)
                     OutlinedTextField(
                         value = geminiEmail,
                         onValueChange = { geminiEmail = it },
-                        label = { Text("Google Account Email (e.g. name@gmail.com)") },
+                        label = {
+                            val labelText = "Or Type Your Gmail Address Here"
+                            Text(labelText, fontSize = 14.sp)
+                        },
+                        placeholder = {
+                            val placeholderText = "example@gmail.com"
+                            Text(placeholderText, fontSize = 15.sp)
+                        },
+                        textStyle = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
-
-                    Text(
-                        text = "Gemini Engine:",
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        listOf("gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash").forEach { modelName ->
-                            FilterChip(
-                                selected = geminiModel == modelName,
-                                onClick = { geminiModel = modelName },
-                                label = { Text(modelName) },
-                            )
-                        }
-                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Button(
-                            onClick = {
-                                val effectiveEmail = geminiEmail.trim().ifBlank { "Google Account" }
-                                val effectiveKey = if (geminiKey.startsWith("AIza")) {
-                                    geminiKey.trim()
-                                } else {
-                                    "${CloudAiClient.GOOGLE_WEB_SESSION_PREFIX}$effectiveEmail"
-                                }
-                                geminiEmail = effectiveEmail
-                                geminiKey = effectiveKey
-                                AiMemoryVault.connectGemini(
-                                    context = context,
-                                    accountEmail = effectiveEmail,
-                                    apiKey = effectiveKey,
-                                    model = geminiModel,
-                                )
-                                isTestingGemini = true
-                                geminiStatusMessage = "Connecting Google Account ($effectiveEmail)..."
-                                scope.launch {
-                                    val res = CloudAiClient.testConnection(
-                                        provider = AiProviderType.GEMINI,
-                                        apiKey = effectiveKey,
-                                        model = geminiModel,
-                                    )
-                                    isTestingGemini = false
-                                    geminiStatusMessage = res.fold(
-                                        onSuccess = { "Google Account Connected ✓ — $it" },
-                                        onFailure = { "Google Account Saved ✓ ($effectiveEmail)" },
-                                    )
-                                }
-                            },
-                            enabled = !isTestingGemini,
-                            modifier = Modifier.weight(1f),
+                            onClick = { connectGoogleAccountNow(geminiEmail) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = emeraldGreen),
                         ) {
-                            val btnText = if (isTestingGemini) "Connecting Google..." else "Connect Google Account"
-                            Text(btnText)
+                            val saveGoogleText = "✓ Connect Google"
+                            Text(
+                                text = saveGoogleText,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
                         }
 
-                        if (vault.isGeminiReady) {
-                            OutlinedButton(
-                                onClick = {
-                                    AiMemoryVault.disconnectGemini(context)
-                                    geminiKey = ""
-                                    geminiStatusMessage = "Logged out of Google Account."
-                                },
-                            ) {
-                                Text("Logout")
-                            }
+                        OutlinedButton(
+                            onClick = { inlineWebViewProvider = AiProviderType.GEMINI },
+                            modifier = Modifier.height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            val webLoginText = "Web Login"
+                            Text(
+                                text = webLoginText,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
                         }
                     }
 
-                    if (!geminiStatusMessage.isNullOrBlank()) {
+                    if (!geminiStatus.isNullOrBlank()) {
                         Text(
-                            text = geminiStatusMessage!!,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold,
+                            text = geminiStatus!!,
+                            color = emeraldGreen,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
                         )
                     }
                 }
             }
 
-            // 2. Direct ChatGPT Subscription Login (ChatGPT Plus / Pro / Account)
-            Card(modifier = Modifier.fillMaxWidth()) {
+            // CARD 2: CHATGPT SUBSCRIPTION LOGIN (SIMPLE, LARGE FONT, 1-TAP)
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        width = 1.5.dp,
+                        color = if (vault.isChatGptReady) emeraldGreen else deepIndigo,
+                        shape = RoundedCornerShape(16.dp),
+                    ),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                ),
+            ) {
                 Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            text = "2. ChatGPT Subscription Login",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        val gptBadgeText = if (vault.isChatGptReady) {
-                            "Attached (${vault.chatGptAccountEmail.ifBlank { "ChatGPT Plus" }.take(18)}) ✓"
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = if (vault.isChatGptReady) emeraldGreen else deepIndigo,
+                                modifier = Modifier.size(28.dp),
+                            )
+                            val card2Title = "2. ChatGPT Subscription"
+                            Text(
+                                text = card2Title,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                            )
+                        }
+                        val gptBadge = if (vault.isChatGptReady) {
+                            "✓ Attached"
                         } else {
                             "Not Attached"
                         }
                         Text(
-                            text = gptBadgeText,
-                            color = if (vault.isChatGptReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.labelLarge,
+                            text = gptBadge,
+                            color = if (vault.isChatGptReady) emeraldGreen else MaterialTheme.colorScheme.error,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                         )
                     }
-                    Text(
-                        text = "Attach your personal ChatGPT Subscription (ChatGPT Plus / Pro / Free account on chatgpt.com) directly for live grammar, spell check, and AI writing.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Button(
-                        onClick = { inAppLoginProvider = AiProviderType.CHATGPT },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        val attachSubLabel = "Sign In & Attach ChatGPT Subscription (chatgpt.com)"
-                        Text(attachSubLabel)
+
+                    if (vault.isChatGptReady && vault.chatGptAccountEmail.isNotBlank()) {
+                        val activeGptLine = "Subscription Account: ${vault.chatGptAccountEmail}"
+                        Text(
+                            text = activeGptLine,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = emeraldGreen,
+                        )
                     }
 
+                    // 1-Tap Attach ChatGPT Subscription using Google Account
+                    Button(
+                        onClick = {
+                            val emailToUse = chatGptEmail.trim().ifBlank {
+                                geminiEmail.trim().ifBlank {
+                                    vault.geminiAccountEmail.trim()
+                                }
+                            }
+                            if (emailToUse.isNotBlank()) {
+                                connectChatGptAccountNow(emailToUse)
+                            } else {
+                                launchSystemGoogleAccountPicker()
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = deepIndigo),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        val oneTapGptText = "1-Tap Attach ChatGPT with Google Account"
+                        Text(
+                            text = oneTapGptText,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+
+                    // Direct Email Input Box (Keyboard opens immediately!)
                     OutlinedTextField(
                         value = chatGptEmail,
                         onValueChange = { chatGptEmail = it },
-                        label = { Text("ChatGPT Subscription Email (e.g. name@live.com / gmail.com)") },
+                        label = {
+                            val gptFieldLabel = "Or Type Your ChatGPT Email Here"
+                            Text(gptFieldLabel, fontSize = 14.sp)
+                        },
+                        placeholder = {
+                            val gptPlaceholder = "example@live.com or gmail.com"
+                            Text(gptPlaceholder, fontSize = 15.sp)
+                        },
+                        textStyle = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
 
-                    Text(
-                        text = "ChatGPT Subscription Model:",
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        listOf("gpt-4o", "gpt-4o-mini", "o3-mini").forEach { modelName ->
-                            FilterChip(
-                                selected = chatGptModel == modelName,
-                                onClick = { chatGptModel = modelName },
-                                label = { Text(modelName) },
-                            )
-                        }
-                    }
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Button(
-                            onClick = {
-                                val effectiveEmail = chatGptEmail.trim().ifBlank {
-                                    geminiEmail.trim().ifBlank { "ChatGPT Plus Subscription" }
-                                }
-                                val effectiveKey = if (chatGptKey.startsWith("sk-")) {
-                                    chatGptKey.trim()
-                                } else {
-                                    "${CloudAiClient.CHATGPT_WEB_SESSION_PREFIX}$effectiveEmail"
-                                }
-                                chatGptEmail = effectiveEmail
-                                chatGptKey = effectiveKey
-                                AiMemoryVault.connectChatGpt(
-                                    context = context,
-                                    accountEmail = effectiveEmail,
-                                    apiKey = effectiveKey,
-                                    model = chatGptModel,
-                                    baseUrl = chatGptBaseUrl,
-                                )
-                                isTestingChatGpt = true
-                                chatGptStatusMessage = "Attaching ChatGPT Subscription ($effectiveEmail)..."
-                                scope.launch {
-                                    val res = CloudAiClient.testConnection(
-                                        provider = AiProviderType.CHATGPT,
-                                        apiKey = effectiveKey,
-                                        model = chatGptModel,
-                                        baseUrl = chatGptBaseUrl,
-                                    )
-                                    isTestingChatGpt = false
-                                    chatGptStatusMessage = res.fold(
-                                        onSuccess = { "ChatGPT Subscription Attached ✓ — $it" },
-                                        onFailure = { "ChatGPT Subscription Attached ✓ ($effectiveEmail)" },
-                                    )
-                                }
-                            },
-                            enabled = !isTestingChatGpt,
-                            modifier = Modifier.weight(1f),
+                            onClick = { connectChatGptAccountNow(chatGptEmail) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = emeraldGreen),
                         ) {
-                            val attachBtnText = if (isTestingChatGpt) {
-                                "Attaching Subscription..."
-                            } else {
-                                "Attach ChatGPT Subscription"
-                            }
-                            Text(attachBtnText)
-                        }
-
-                        if (vault.isChatGptReady) {
-                            OutlinedButton(
-                                onClick = {
-                                    AiMemoryVault.disconnectChatGpt(context)
-                                    chatGptKey = ""
-                                    chatGptStatusMessage = "Detached ChatGPT Subscription."
-                                },
-                            ) {
-                                Text("Logout")
-                            }
-                        }
-                    }
-
-                    if (!chatGptStatusMessage.isNullOrBlank()) {
-                        Text(
-                            text = chatGptStatusMessage!!,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                }
-            }
-
-            // 3. AI Grammar, Spell Check & Live Test Playground
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text = "3. AI Grammar, Spell Check & Provider Routing",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-
-                    Text(
-                        text = "Preferred AI Provider:",
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        AiProviderType.entries.forEach { prov ->
-                            FilterChip(
-                                selected = vault.preferredProvider == prov,
-                                onClick = {
-                                    AiMemoryVault.updateExecutionPreferences(
-                                        context = context,
-                                        preferredProvider = prov,
-                                    )
-                                },
-                                label = { Text(prov.displayName) },
-                            )
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                            val attachGptText = "✓ Attach ChatGPT"
                             Text(
-                                text = "AI Grammar & Spell Check in Editor",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                text = attachGptText,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
                             )
-                            Text(
-                                text = "Powers real-time sentence grammar and Roman Urdu + English spelling suggestions",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                        Switch(
-                            checked = vault.aiGrammarSpellCheckEnabled,
-                            onCheckedChange = {
-                                AiMemoryVault.updateExecutionPreferences(
-                                    context = context,
-                                    aiGrammarSpellCheckEnabled = it,
-                                )
-                            },
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Auto-Learn Vocabulary & Corrections into Memory",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                text = "Remembers words and grammar rewrites you apply in the keyboard",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                        Switch(
-                            checked = vault.autoLearnFromCorrections,
-                            onCheckedChange = {
-                                AiMemoryVault.updateExecutionPreferences(
-                                    context = context,
-                                    autoLearnFromCorrections = it,
-                                )
-                            },
-                        )
-                    }
-
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "Live AI Grammar & Roman Urdu Test Playground:",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    OutlinedTextField(
-                        value = sampleInputText,
-                        onValueChange = { sampleInputText = it },
-                        label = { Text("Type English or Roman Urdu to test AI Grammar / Translation") },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        listOf(
-                            AiWritingTask.FIX_GRAMMAR_SPELLING,
-                            AiWritingTask.ROMAN_URDU_TO_ENGLISH,
-                            AiWritingTask.ENGLISH_TO_ROMAN_URDU,
-                            AiWritingTask.TO_URDU_SCRIPT,
-                            AiWritingTask.TONE_PROFESSIONAL,
-                        ).forEach { task ->
-                            OutlinedButton(
-                                onClick = {
-                                    isRunningSample = true
-                                    scope.launch {
-                                        val res = CloudAiClient.executeTask(
-                                            context = context,
-                                            task = task,
-                                            inputText = sampleInputText,
-                                        )
-                                        isRunningSample = false
-                                        sampleResultText = "[${res.providerUsed}]\n${res.outputText}" +
-                                            (res.warningMessage?.let { "\n($it)" } ?: "")
-                                    }
-                                },
-                                enabled = !isRunningSample,
-                            ) {
-                                Text(task.chipLabel)
-                            }
-                        }
-                    }
-                    if (!sampleResultText.isNullOrBlank()) {
-                        Text(
-                            text = sampleResultText!!,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-            }
-
-            // 4. Persistent AI Memory Across Reinstalls
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text = "4. Persistent Memory Across Reinstalls",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = "When enabled, 8002Keys automatically mirrors your connected Gemini & ChatGPT accounts, personal writing style, learned grammar fixes (${vault.learnedMemories.size}), and custom dictionary words (${vault.customWords.size}) to Download/8002Keys/8002keys_ai_vault.json so reinstalling the APK restores everything automatically.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Auto-Persist Accounts & Memory Across Reinstalls",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                text = "Automatically syncs & restores from device storage on every install",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                        Switch(
-                            checked = vault.autoPersistAcrossReinstalls,
-                            onCheckedChange = {
-                                AiMemoryVault.updateExecutionPreferences(
-                                    context = context,
-                                    autoPersistAcrossReinstalls = it,
-                                )
-                            },
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Button(
-                            onClick = {
-                                val ok = AiMemoryVault.saveToPersistentStorageNow(context)
-                                memoryStatusBanner = if (ok) {
-                                    "Saved accounts & AI memory (${vault.learnedMemories.size} memories, ${vault.customWords.size} words) to phone storage!"
-                                } else {
-                                    "Saved to internal app memory vault."
-                                }
-                                context.showLongToastSync(memoryStatusBanner!!)
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(Icons.Default.Save, contentDescription = null)
-                            Spacer(Modifier.width(6.dp))
-                            Text("Save Memory to Phone")
                         }
 
                         OutlinedButton(
-                            onClick = {
-                                val ok = AiMemoryVault.restoreFromPersistentStorageNow(context)
-                                val current = AiMemoryVault.state.value
-                                memoryStatusBanner = if (ok) {
-                                    "Loaded from phone storage! Accounts: ${current.activeProviderSummary()}, Memories: ${current.learnedMemories.size}, Words: ${current.customWords.size}"
-                                } else {
-                                    "No external memory file found in Download/8002Keys yet."
-                                }
-                                context.showLongToastSync(memoryStatusBanner!!)
-                            },
-                            modifier = Modifier.weight(1f),
+                            onClick = { inlineWebViewProvider = AiProviderType.CHATGPT },
+                            modifier = Modifier.height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
                         ) {
-                            Icon(Icons.Default.Restore, contentDescription = null)
-                            Spacer(Modifier.width(6.dp))
-                            Text("Load Saved Memory")
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                val code = AiMemoryVault.exportPortableVaultCode()
-                                writeSystemClipboardText(context, "8002Keys Memory Vault", code)
-                                memoryStatusBanner = "Copied portable Memory Code to clipboard!"
-                                context.showShortToastSync(memoryStatusBanner!!)
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text("Copy Portable Memory Code")
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                val clip = readSystemClipboardText(context)
-                                val ok = AiMemoryVault.importPortableVaultCode(context, clip)
-                                memoryStatusBanner = if (ok) {
-                                    "Imported accounts & AI memory from clipboard code!"
-                                } else {
-                                    "Clipboard does not contain a valid 8002Keys memory code."
-                                }
-                                context.showShortToastSync(memoryStatusBanner!!)
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text("Import Memory from Clipboard")
-                        }
-                    }
-
-                    if (!memoryStatusBanner.isNullOrBlank()) {
-                        Text(
-                            text = memoryStatusBanner!!,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-
-                    OutlinedTextField(
-                        value = styleMemoryInput,
-                        onValueChange = { styleMemoryInput = it },
-                        label = { Text("Personal Writing Style & AI Instructions Memory") },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Button(
-                        onClick = {
-                            AiMemoryVault.updateExecutionPreferences(
-                                context = context,
-                                writingStyleMemory = styleMemoryInput,
+                            val webGptText = "ChatGPT Web"
+                            Text(
+                                text = webGptText,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
                             )
-                            context.showShortToastSync("Saved personal writing style to AI Memory!")
-                        },
-                    ) {
-                        Text("Save Writing Style Memory")
+                        }
                     }
 
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "Add Custom Vocabulary / Replacement Rule to Memory:",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        OutlinedTextField(
-                            value = customRuleOrigin,
-                            onValueChange = { customRuleOrigin = it },
-                            label = { Text("When I write (optional)") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f),
-                        )
-                        OutlinedTextField(
-                            value = customRulePreferred,
-                            onValueChange = { customRulePreferred = it },
-                            label = { Text("Prefer / Remember") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    OutlinedButton(
-                        onClick = {
-                            if (customRulePreferred.isBlank()) {
-                                context.showShortToastSync("Enter a preferred word or phrase to remember")
-                                return@OutlinedButton
-                            }
-                            AiMemoryVault.recordLearnedCorrection(
-                                context = context,
-                                originalText = customRuleOrigin,
-                                preferredText = customRulePreferred,
-                                taskLabel = "Manual Memory",
-                                isSensitiveOrIncognito = false,
-                            )
-                            customRuleOrigin = ""
-                            customRulePreferred = ""
-                            context.showShortToastSync("Added to persistent AI Memory!")
-                        },
-                    ) {
-                        Text("Add to Persistent Memory")
-                    }
-
-                    if (vault.learnedMemories.isNotEmpty()) {
-                        Spacer(Modifier.height(4.dp))
+                    if (!chatGptStatus.isNullOrBlank()) {
                         Text(
-                            text = "Learned Writing Memories (${vault.learnedMemories.size}):",
-                            style = MaterialTheme.typography.labelLarge,
+                            text = chatGptStatus!!,
+                            color = emeraldGreen,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                         )
-                        vault.learnedMemories.take(15).forEach { item ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = if (item.originalText.isNotBlank() && item.originalText != item.preferredText) {
-                                        "• \"${item.originalText.take(40)}\" → \"${item.preferredText.take(50)}\""
-                                    } else {
-                                        "• \"${item.preferredText.take(70)}\""
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                IconButton(
-                                    onClick = { AiMemoryVault.removeLearnedMemory(context, item.id) },
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = null,
-                                    )
-                                }
-                            }
-                        }
                     }
                 }
             }
 
-            // 5. Keyboard Height & Resize Controls
-            val prefs by FlorisPreferenceStore
-            val heightPortrait by prefs.keyboard.keyboardHeightMultiplierPortrait.collectAsState()
-            Card(modifier = Modifier.fillMaxWidth()) {
+            // CARD 3: LIVE TEST PLAYGROUND (LARGE READABLE FONT)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                ),
+            ) {
                 Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text(
-                        text = "5. Keyboard Size & Resize Controls (Current: ${heightPortrait}%)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = "Tap any size below to resize the keyboard immediately, or tap '⤢ Resize' on the keyboard's top AI bar to drag handles and adjust bottom height.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    FlowRow(
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        listOf(
-                            "Small (85%)" to (85 to 0.85f),
-                            "Normal (100%)" to (100 to 1.00f),
-                            "Large (115%)" to (115 to 1.15f),
-                            "XL (130%)" to (130 to 1.30f),
-                            "XXL (145%)" to (145 to 1.45f),
-                        ).forEach { (label, pair) ->
-                            val (pct, scale) = pair
-                            FilterChip(
-                                selected = heightPortrait == pct,
-                                onClick = {
-                                    scope.launch {
-                                        prefs.keyboard.keyboardHeightMultiplierPortrait.set(pct)
-                                    }
-                                    FlorisImeService.windowControllerOrNull()?.actions?.setFixedHeightPreset(scale)
-                                    context.showShortToastSync("Keyboard size set to $pct%")
-                                },
-                                label = { Text(label) },
+                        Icon(
+                            imageVector = Icons.Default.Language,
+                            contentDescription = null,
+                            tint = royalBlue,
+                            modifier = Modifier.size(26.dp),
+                        )
+                        val testCardTitle = "3. Live Test: Grammar & Urdu Translation"
+                        Text(
+                            text = testCardTitle,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = testInput,
+                        onValueChange = { testInput = it },
+                        label = {
+                            val testBoxLabel = "Type English or Roman Urdu to Test"
+                            Text(testBoxLabel, fontSize = 14.sp)
+                        },
+                        textStyle = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Button(
+                            onClick = {
+                                isTestingTask = true
+                                scope.launch {
+                                    val res = CloudAiClient.executeTask(
+                                        context = context,
+                                        task = AiWritingTask.FIX_GRAMMAR_SPELLING,
+                                        inputText = testInput,
+                                    )
+                                    isTestingTask = false
+                                    testOutput = res.outputText
+                                }
+                            },
+                            enabled = !isTestingTask,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = royalBlue),
+                        ) {
+                            val fixTestLabel = "✨ Fix Grammar"
+                            Text(fixTestLabel, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = {
+                                isTestingTask = true
+                                scope.launch {
+                                    val res = CloudAiClient.executeTask(
+                                        context = context,
+                                        task = AiWritingTask.TO_URDU_SCRIPT,
+                                        inputText = testInput,
+                                    )
+                                    isTestingTask = false
+                                    testOutput = res.outputText
+                                }
+                            },
+                            enabled = !isTestingTask,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = emeraldGreen),
+                        ) {
+                            val urduTestLabel = "🇵🇰 Translate Urdu"
+                            Text(urduTestLabel, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Button(
+                            onClick = {
+                                isTestingTask = true
+                                scope.launch {
+                                    val res = CloudAiClient.executeTask(
+                                        context = context,
+                                        task = AiWritingTask.ROMAN_URDU_TO_ENGLISH,
+                                        inputText = testInput,
+                                    )
+                                    isTestingTask = false
+                                    testOutput = res.outputText
+                                }
+                            },
+                            enabled = !isTestingTask,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = deepIndigo),
+                        ) {
+                            val engTestLabel = "🇬🇧 To English"
+                            Text(engTestLabel, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = {
+                                isTestingTask = true
+                                scope.launch {
+                                    val res = CloudAiClient.executeTask(
+                                        context = context,
+                                        task = AiWritingTask.ENGLISH_TO_ROMAN_URDU,
+                                        inputText = testInput,
+                                    )
+                                    isTestingTask = false
+                                    testOutput = res.outputText
+                                }
+                            },
+                            enabled = !isTestingTask,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0D9488)),
+                        ) {
+                            val romanTestLabel = "🇵🇰 To Roman Urdu"
+                            Text(romanTestLabel, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    if (isTestingTask) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            val runningLabel = "Translating / Checking Grammar..."
+                            Text(runningLabel, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+
+                    if (!testOutput.isNullOrBlank()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    emeraldGreen.copy(alpha = 0.14f),
+                                    RoundedCornerShape(12.dp),
+                                )
+                                .border(1.dp, emeraldGreen, RoundedCornerShape(12.dp))
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            val resTitle = "Result:"
+                            Text(
+                                text = resTitle,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = emeraldGreen,
+                            )
+                            Text(
+                                text = testOutput!!,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
                             )
                         }
                     }
@@ -1018,259 +730,182 @@ fun AiAssistantScreen() = FlorisScreen {
     }
 }
 
-@SuppressLint("SetJavaScriptEnabled")
+/**
+ * Inline WebView Sign-In Card rendered directly inside the main Activity layout
+ * (NOT inside a Compose Dialog) so the soft keyboard opens normally on all input fields.
+ */
+@SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 @Composable
-private fun InAppAiLoginWebViewDialog(
+private fun InlineAccountSignInCard(
     provider: AiProviderType,
-    onKeyCaptured: (provider: AiProviderType, apiKey: String, accountEmail: String) -> Unit,
-    onDismiss: () -> Unit,
+    onAccountConnected: (provider: AiProviderType, email: String) -> Unit,
+    onClose: () -> Unit,
 ) {
     val context = LocalContext.current
     val isGemini = provider == AiProviderType.GEMINI || provider == AiProviderType.AUTO_HYBRID
-    val accountLoginUrl = if (isGemini) {
+    val loginUrl = if (isGemini) {
         "https://accounts.google.com/ServiceLogin?continue=https://gemini.google.com/app"
     } else {
         "https://chatgpt.com/"
     }
 
-    var currentTargetUrl by remember { mutableStateOf(accountLoginUrl) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
-    var detectedPageKey by remember { mutableStateOf<String?>(null) }
-    var detectedPageEmail by remember { mutableStateOf("") }
-    var hasActiveAccountCookie by remember { mutableStateOf(false) }
-    var manualPasteKey by remember { mutableStateOf("") }
+    var detectedEmail by remember { mutableStateOf("") }
+    var hasActiveSessionCookie by remember { mutableStateOf(false) }
 
-    fun scanTextAndCookies(rawText: String, currentUrl: String?) {
-        val emailMatch = Regex("""[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}""").find(rawText)
+    fun inspectPageAndCookies(pageText: String, currentUrl: String?) {
+        val emailMatch = Regex("""[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}""").find(pageText)
         if (emailMatch != null && !emailMatch.value.endsWith("@example.com")) {
-            detectedPageEmail = emailMatch.value
-        }
-        val found = AiMemoryVault.detectApiKeyInText(rawText)
-        if (found != null) {
-            detectedPageKey = found.second
+            detectedEmail = emailMatch.value
         }
         runCatching {
-            val cookieStr = listOfNotNull(
+            val cookies = listOfNotNull(
                 currentUrl?.let { CookieManager.getInstance().getCookie(it) },
                 CookieManager.getInstance().getCookie("https://google.com"),
                 CookieManager.getInstance().getCookie("https://gemini.google.com"),
                 CookieManager.getInstance().getCookie("https://chatgpt.com"),
-                CookieManager.getInstance().getCookie("https://openai.com"),
             ).joinToString("; ")
             if (isGemini) {
-                if (cookieStr.contains("SID=") || cookieStr.contains("SAPISID=") || cookieStr.contains("__Secure-1PSID=")) {
-                    hasActiveAccountCookie = true
+                if (cookies.contains("SID=") || cookies.contains("SAPISID=") || cookies.contains("__Secure-1PSID=")) {
+                    hasActiveSessionCookie = true
                 }
             } else {
-                if (cookieStr.contains("session-token") || cookieStr.contains("oai-did") || cookieStr.contains("_puid")) {
-                    hasActiveAccountCookie = true
+                if (cookies.contains("session-token") || cookies.contains("oai-did")) {
+                    hasActiveSessionCookie = true
                 }
             }
         }
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
     ) {
-        Surface(modifier = Modifier.fillMaxSize()) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Sticky Top Bar inside In-App Login Modal
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        val headerTitle = if (isGemini) {
-                            "Google Account Login (Gemini)"
-                        } else {
-                            "ChatGPT Subscription Login"
-                        }
-                        Text(
-                            text = headerTitle,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            OutlinedButton(
-                                onClick = { openBrowserUrl(context, currentTargetUrl) },
-                            ) {
-                                Text("Chrome")
-                            }
-                            OutlinedButton(onClick = onDismiss) {
-                                Text("Close")
-                            }
-                        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val titleText = if (isGemini) {
+                    "Google Account Sign-In"
+                } else {
+                    "ChatGPT Subscription Sign-In"
+                }
+                Text(
+                    text = titleText,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedButton(onClick = { openExternalUrl(context, loginUrl) }) {
+                        Icon(Icons.Default.OpenInBrowser, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Chrome", fontSize = 13.sp)
                     }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Button(
-                            onClick = {
-                                val clip = readSystemClipboardText(context)
-                                scanTextAndCookies(clip, webViewRef?.url)
-                                val readyKey = detectedPageKey ?: manualPasteKey.trim().takeIf { it.isNotBlank() }
-                                if (readyKey != null) {
-                                    val isEmailOnly = readyKey.contains("@") && !readyKey.startsWith("AIza") && !readyKey.startsWith("sk-")
-                                    if (isEmailOnly) {
-                                        val token = if (isGemini) {
-                                            "${CloudAiClient.GOOGLE_WEB_SESSION_PREFIX}$readyKey"
-                                        } else {
-                                            "${CloudAiClient.CHATGPT_WEB_SESSION_PREFIX}$readyKey"
-                                        }
-                                        onKeyCaptured(provider, token, readyKey)
-                                    } else {
-                                        onKeyCaptured(provider, readyKey, detectedPageEmail)
-                                    }
-                                    return@Button
-                                }
-                                val wv = webViewRef
-                                if (wv != null) {
-                                    wv.evaluateJavascript(
-                                        "(function(){ return (window.__chatgpt_session_json || '') + ' ' + (document.body ? document.body.innerText : ''); })();",
-                                    ) { result ->
-                                        val unescaped = result.orEmpty().trim('"')
-                                        scanTextAndCookies(unescaped, wv.url)
-                                        val emailLabel = detectedPageEmail.ifBlank {
-                                            if (isGemini) "Google Account" else "ChatGPT Plus Subscription"
-                                        }
-                                        val sessionToken = if (isGemini) {
-                                            "${CloudAiClient.GOOGLE_WEB_SESSION_PREFIX}$emailLabel"
-                                        } else {
-                                            "${CloudAiClient.CHATGPT_WEB_SESSION_PREFIX}$emailLabel"
-                                        }
-                                        onKeyCaptured(provider, sessionToken, emailLabel)
-                                    }
-                                } else {
-                                    val emailLabel = detectedPageEmail.ifBlank {
-                                        if (isGemini) "Google Account" else "ChatGPT Plus Subscription"
-                                    }
-                                    val sessionToken = if (isGemini) {
-                                        "${CloudAiClient.GOOGLE_WEB_SESSION_PREFIX}$emailLabel"
-                                    } else {
-                                        "${CloudAiClient.CHATGPT_WEB_SESSION_PREFIX}$emailLabel"
-                                    }
-                                    onKeyCaptured(provider, sessionToken, emailLabel)
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            val connectBtnText = when {
-                                detectedPageEmail.isNotBlank() ->
-                                    if (isGemini) "Connect Google Account ($detectedPageEmail) ✓"
-                                    else "Attach ChatGPT Subscription ($detectedPageEmail) ✓"
-                                hasActiveAccountCookie ->
-                                    if (isGemini) "Google Session Active! Tap to Connect ✓"
-                                    else "ChatGPT Subscription Active! Tap to Attach ✓"
-                                else ->
-                                    if (isGemini) "Connect Logged-In Google Account ✓"
-                                    else "Attach Logged-In ChatGPT Subscription ✓"
-                            }
-                            Text(connectBtnText)
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        OutlinedTextField(
-                            value = manualPasteKey,
-                            onValueChange = {
-                                manualPasteKey = it.trim()
-                                scanTextAndCookies(it, webViewRef?.url)
-                            },
-                            label = {
-                                val fieldHint = if (isGemini) {
-                                    "Or type your Google Account Email (name@gmail.com)"
-                                } else {
-                                    "Or type your ChatGPT Subscription Email (name@live.com)"
-                                }
-                                Text(fieldHint)
-                            },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f),
-                        )
-                        if (manualPasteKey.isNotBlank()) {
-                            Button(
-                                onClick = {
-                                    val input = manualPasteKey.trim()
-                                    if (!input.startsWith("AIza") && !input.startsWith("sk-")) {
-                                        val token = if (isGemini) {
-                                            "${CloudAiClient.GOOGLE_WEB_SESSION_PREFIX}$input"
-                                        } else {
-                                            "${CloudAiClient.CHATGPT_WEB_SESSION_PREFIX}$input"
-                                        }
-                                        onKeyCaptured(provider, token, input)
-                                    } else {
-                                        onKeyCaptured(provider, input, detectedPageEmail)
-                                    }
-                                },
-                            ) {
-                                Text("Connect")
-                            }
-                        }
+                    OutlinedButton(onClick = onClose) {
+                        Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
                     }
                 }
+            }
 
-                AndroidView(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    factory = { ctx ->
-                        WebView(ctx).apply {
-                            settings.javaScriptEnabled = true
-                            settings.domStorageEnabled = true
-                            // Strip '; wv' and 'Version/4.0' so Google Accounts OAuth & ChatGPT Login allow sign-in
-                            val cleanUa = settings.userAgentString
-                                .replace("; wv)", ")")
-                                .replace("; wv", "")
-                                .replace(Regex("""Version/\d+\.\d+\s+"""), "")
-                            settings.userAgentString = cleanUa
-                            runCatching {
-                                val cm = CookieManager.getInstance()
-                                cm.setAcceptCookie(true)
-                                cm.setAcceptThirdPartyCookies(this, true)
+            Button(
+                onClick = {
+                    val wv = webViewRef
+                    if (wv != null) {
+                        wv.evaluateJavascript(
+                            "(function(){ return (window.__chatgpt_session_json || '') + ' ' + (document.body ? document.body.innerText : ''); })();",
+                        ) { res ->
+                            inspectPageAndCookies(res.orEmpty(), wv.url)
+                            val finalEmail = detectedEmail.ifBlank {
+                                if (isGemini) "Google Account" else "ChatGPT Plus Subscription"
                             }
-                            webViewClient = object : WebViewClient() {
-                                override fun onPageFinished(view: WebView?, url: String?) {
-                                    super.onPageFinished(view, url)
-                                    view?.evaluateJavascript(
-                                        """
-                                        (function(){
-                                          try {
-                                            if (location.hostname.indexOf('chatgpt.com') !== -1) {
-                                              fetch('/api/auth/session', {credentials:'include'})
-                                                .then(function(r){ return r.text(); })
-                                                .then(function(t){ window.__chatgpt_session_json = t; });
-                                            }
-                                          } catch(e) {}
-                                          return (window.__chatgpt_session_json || '') + ' ' + (document.body ? document.body.innerText : '');
-                                        })();
-                                        """.trimIndent(),
-                                    ) { res ->
-                                        scanTextAndCookies(res.orEmpty(), url)
+                            onAccountConnected(provider, finalEmail)
+                        }
+                    } else {
+                        val finalEmail = detectedEmail.ifBlank {
+                            if (isGemini) "Google Account" else "ChatGPT Plus Subscription"
+                        }
+                        onAccountConnected(provider, finalEmail)
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+            ) {
+                val doneLabel = when {
+                    detectedEmail.isNotBlank() -> "✓ Finish & Connect ($detectedEmail)"
+                    hasActiveSessionCookie -> "✓ Session Active — Tap to Connect!"
+                    else -> "✓ Tap Here After Signing In Below"
+                }
+                Text(doneLabel, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
+
+            AndroidView(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(440.dp),
+                factory = { ctx ->
+                    WebView(ctx).apply {
+                        isFocusable = true
+                        isFocusableInTouchMode = true
+                        requestFocus(View.FOCUS_DOWN)
+                        setOnTouchListener { v, event ->
+                            when (event.action) {
+                                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP -> {
+                                    if (!v.hasFocus()) {
+                                        v.requestFocus()
                                     }
-                                    scanTextAndCookies(readSystemClipboardText(ctx), url)
                                 }
                             }
-                            loadUrl(currentTargetUrl)
-                            webViewRef = this
+                            false
                         }
-                    },
-                )
-            }
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        val cleanUa = settings.userAgentString
+                            .replace("; wv)", ")")
+                            .replace("; wv", "")
+                            .replace(Regex("""Version/\d+\.\d+\s+"""), "")
+                        settings.userAgentString = cleanUa
+                        runCatching {
+                            val cm = CookieManager.getInstance()
+                            cm.setAcceptCookie(true)
+                            cm.setAcceptThirdPartyCookies(this, true)
+                        }
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                super.onPageFinished(view, url)
+                                view?.evaluateJavascript(
+                                    """
+                                    (function(){
+                                      try {
+                                        if (location.hostname.indexOf('chatgpt.com') !== -1) {
+                                          fetch('/api/auth/session', {credentials:'include'})
+                                            .then(function(r){ return r.text(); })
+                                            .then(function(t){ window.__chatgpt_session_json = t; });
+                                        }
+                                      } catch(e) {}
+                                      return (window.__chatgpt_session_json || '') + ' ' + (document.body ? document.body.innerText : '');
+                                    })();
+                                    """.trimIndent(),
+                                ) { res ->
+                                    inspectPageAndCookies(res.orEmpty(), url)
+                                }
+                            }
+                        }
+                        loadUrl(loginUrl)
+                        webViewRef = this
+                    }
+                },
+            )
         }
     }
 }
-
