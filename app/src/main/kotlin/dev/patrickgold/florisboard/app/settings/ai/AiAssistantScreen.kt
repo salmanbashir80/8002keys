@@ -16,17 +16,21 @@
 
 package dev.patrickgold.florisboard.app.settings.ai
 
+import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -48,6 +52,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -65,11 +70,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import dev.patrickgold.florisboard.FlorisImeService
+import dev.patrickgold.florisboard.app.FlorisPreferenceStore
 import dev.patrickgold.florisboard.ime.ai.AiMemoryVault
 import dev.patrickgold.florisboard.ime.ai.AiProviderType
 import dev.patrickgold.florisboard.ime.ai.AiWritingTask
 import dev.patrickgold.florisboard.ime.ai.CloudAiClient
 import dev.patrickgold.florisboard.lib.compose.FlorisScreen
+import dev.patrickgold.jetpref.datastore.model.collectAsState
 import kotlinx.coroutines.launch
 import org.florisboard.lib.android.showLongToastSync
 import org.florisboard.lib.android.showShortToastSync
@@ -134,11 +145,50 @@ fun AiAssistantScreen() = FlorisScreen {
     var isRunningSample by remember { mutableStateOf(false) }
 
     var clipboardDetected by remember { mutableStateOf<Pair<AiProviderType, String>?>(null) }
+    var inAppLoginProvider by remember { mutableStateOf<AiProviderType?>(null) }
 
     LaunchedEffect(Unit) {
         AiMemoryVault.initialize(context)
         val clip = readSystemClipboardText(context)
         clipboardDetected = AiMemoryVault.detectApiKeyInText(clip)
+    }
+
+    val activeLoginModal = inAppLoginProvider
+    if (activeLoginModal != null) {
+        InAppAiLoginWebViewDialog(
+            provider = activeLoginModal,
+            onKeyCaptured = { capturedProvider, capturedKey, capturedEmail ->
+                if (capturedProvider == AiProviderType.GEMINI) {
+                    geminiKey = capturedKey
+                    if (capturedEmail.isNotBlank()) geminiEmail = capturedEmail
+                    AiMemoryVault.connectGemini(
+                        context = context,
+                        accountEmail = capturedEmail.ifBlank { geminiEmail.ifBlank { "Google Gemini Account" } },
+                        apiKey = capturedKey,
+                        model = geminiModel,
+                    )
+                    geminiStatusMessage = "Google Gemini Logged In & Saved to Persistent Memory ✓"
+                } else {
+                    chatGptKey = capturedKey
+                    if (capturedEmail.isNotBlank()) chatGptEmail = capturedEmail
+                    AiMemoryVault.connectChatGpt(
+                        context = context,
+                        accountEmail = capturedEmail.ifBlank { chatGptEmail.ifBlank { "OpenAI ChatGPT Account" } },
+                        apiKey = capturedKey,
+                        model = chatGptModel,
+                        baseUrl = chatGptBaseUrl,
+                    )
+                    chatGptStatusMessage = "OpenAI ChatGPT Logged In & Saved to Persistent Memory ✓"
+                }
+                inAppLoginProvider = null
+                context.showLongToastSync("${capturedProvider.displayName} logged in & saved to phone memory!")
+            },
+            onDismiss = {
+                val clip = readSystemClipboardText(context)
+                clipboardDetected = AiMemoryVault.detectApiKeyInText(clip)
+                inAppLoginProvider = null
+            },
+        )
     }
 
     content {
@@ -245,9 +295,17 @@ fun AiAssistantScreen() = FlorisScreen {
                         )
                     }
                     Text(
-                        text = "Tap Step 1 to sign in with your Google Account in Google AI Studio and copy your free Gemini API key, then tap Paste & Login.",
+                        text = "Sign in with your Google Account inside the app (or browser) to connect Google Gemini AI for spell check, grammar fixing, and Roman Urdu/English writing.",
                         style = MaterialTheme.typography.bodySmall,
                     )
+                    Button(
+                        onClick = { inAppLoginProvider = AiProviderType.GEMINI },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Sign In with Google Inside App (Gemini Login)")
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -258,7 +316,7 @@ fun AiAssistantScreen() = FlorisScreen {
                         ) {
                             Icon(Icons.Default.OpenInBrowser, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
-                            Text("Step 1: Google Sign-In (Get Key)")
+                            Text("Open in Chrome")
                         }
                         OutlinedButton(
                             onClick = {
@@ -412,9 +470,17 @@ fun AiAssistantScreen() = FlorisScreen {
                         )
                     }
                     Text(
-                        text = "Tap Step 1 to sign in to your OpenAI / ChatGPT account and copy an API key (sk-...), then tap Paste & Login.",
+                        text = "Sign in with your ChatGPT / OpenAI account inside the app (or browser) to connect ChatGPT for grammar, spell check, and writing assistance.",
                         style = MaterialTheme.typography.bodySmall,
                     )
+                    Button(
+                        onClick = { inAppLoginProvider = AiProviderType.CHATGPT },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Sign In with ChatGPT Inside App (OpenAI Login)")
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -425,7 +491,7 @@ fun AiAssistantScreen() = FlorisScreen {
                         ) {
                             Icon(Icons.Default.OpenInBrowser, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
-                            Text("Step 1: ChatGPT Sign-In (Get Key)")
+                            Text("Open in Chrome")
                         }
                         OutlinedButton(
                             onClick = {
@@ -928,6 +994,216 @@ fun AiAssistantScreen() = FlorisScreen {
                         }
                     }
                 }
+            }
+
+            // 5. Keyboard Height & Resize Controls
+            val prefs by FlorisPreferenceStore
+            val heightPortrait by prefs.keyboard.keyboardHeightMultiplierPortrait.collectAsState()
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = "5. Keyboard Size & Resize Controls (Current: ${heightPortrait}%)",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "Tap any size below to resize the keyboard immediately, or tap '⤢ Resize' on the keyboard's top AI bar to drag handles and adjust bottom height.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        listOf(
+                            "Small (85%)" to (85 to 0.85f),
+                            "Normal (100%)" to (100 to 1.00f),
+                            "Large (115%)" to (115 to 1.15f),
+                            "XL (130%)" to (130 to 1.30f),
+                            "XXL (145%)" to (145 to 1.45f),
+                        ).forEach { (label, pair) ->
+                            val (pct, scale) = pair
+                            FilterChip(
+                                selected = heightPortrait == pct,
+                                onClick = {
+                                    scope.launch {
+                                        prefs.keyboard.keyboardHeightMultiplierPortrait.set(pct)
+                                    }
+                                    FlorisImeService.windowControllerOrNull()?.actions?.setFixedHeightPreset(scale)
+                                    context.showShortToastSync("Keyboard size set to $pct%")
+                                },
+                                label = { Text(label) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun InAppAiLoginWebViewDialog(
+    provider: AiProviderType,
+    onKeyCaptured: (provider: AiProviderType, apiKey: String, accountEmail: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val targetUrl = when (provider) {
+        AiProviderType.GEMINI, AiProviderType.AUTO_HYBRID -> "https://aistudio.google.com/app/apikey"
+        AiProviderType.CHATGPT -> "https://platform.openai.com/api-keys"
+    }
+    var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    var detectedPageKey by remember { mutableStateOf<String?>(null) }
+    var detectedPageEmail by remember { mutableStateOf("") }
+    var manualPasteKey by remember { mutableStateOf("") }
+
+    fun scanTextForCredentials(rawText: String) {
+        val emailMatch = Regex("""[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}""").find(rawText)
+        if (emailMatch != null && detectedPageEmail.isBlank()) {
+            detectedPageEmail = emailMatch.value
+        }
+        val found = AiMemoryVault.detectApiKeyInText(rawText)
+        if (found != null) {
+            detectedPageKey = found.second
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Sticky Top Bar inside In-App Login Modal
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "${provider.displayName} In-App Sign-In",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(
+                                onClick = { openBrowserUrl(context, targetUrl) },
+                            ) {
+                                Text("Chrome")
+                            }
+                            OutlinedButton(onClick = onDismiss) {
+                                Text("Close")
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Button(
+                            onClick = {
+                                // 1. Check clipboard first
+                                val clip = readSystemClipboardText(context)
+                                scanTextForCredentials(clip)
+                                val readyKey = detectedPageKey ?: manualPasteKey.trim().takeIf { it.isNotBlank() }
+                                if (readyKey != null) {
+                                    onKeyCaptured(provider, readyKey, detectedPageEmail)
+                                    return@Button
+                                }
+                                // 2. Scan current WebView DOM text
+                                val wv = webViewRef
+                                if (wv != null) {
+                                    wv.evaluateJavascript(
+                                        "(function(){ return document.body ? document.body.innerText : ''; })();",
+                                    ) { result ->
+                                        val unescaped = result.orEmpty().trim('"')
+                                        scanTextForCredentials(unescaped)
+                                        val afterScanKey = detectedPageKey
+                                            ?: AiMemoryVault.detectApiKeyInText(readSystemClipboardText(context))?.second
+                                        if (afterScanKey != null) {
+                                            onKeyCaptured(provider, afterScanKey, detectedPageEmail)
+                                        } else {
+                                            context.showLongToastSync(
+                                                "Sign in below, tap 'Create API Key' / 'Copy', then tap this button again!",
+                                            )
+                                        }
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                text = if (detectedPageKey != null) {
+                                    "Key Detected! Tap to Save Login ✓"
+                                } else {
+                                    "Auto-Grab Key from Page / Clipboard & Login ✓"
+                                },
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedTextField(
+                            value = manualPasteKey,
+                            onValueChange = {
+                                manualPasteKey = it.trim()
+                                scanTextForCredentials(it)
+                            },
+                            label = { Text("Or paste/type API key here directly") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (manualPasteKey.isNotBlank()) {
+                            Button(
+                                onClick = {
+                                    onKeyCaptured(provider, manualPasteKey, detectedPageEmail)
+                                },
+                            ) {
+                                Text("Save")
+                            }
+                        }
+                    }
+                }
+
+                AndroidView(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    factory = { ctx ->
+                        WebView(ctx).apply {
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            webViewClient = object : WebViewClient() {
+                                override fun onPageFinished(view: WebView?, url: String?) {
+                                    super.onPageFinished(view, url)
+                                    view?.evaluateJavascript(
+                                        "(function(){ return document.body ? document.body.innerText : ''; })();",
+                                    ) { res ->
+                                        scanTextForCredentials(res.orEmpty())
+                                    }
+                                    scanTextForCredentials(readSystemClipboardText(ctx))
+                                }
+                            }
+                            loadUrl(targetUrl)
+                            webViewRef = this
+                        }
+                    },
+                )
             }
         }
     }

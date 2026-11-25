@@ -161,10 +161,10 @@ object AiMemoryVault {
             val internalFile = File(appContext.filesDir, INTERNAL_REL_PATH)
             val internalState = readVaultFile(internalFile)
             val externalState = readExternalDeviceVault(appContext)
+            val clipboardState = readClipboardVaultIfPresent(appContext)
 
-            val resolved = when {
+            var resolved = when {
                 internalState != null && externalState != null -> {
-                    // Pick whichever vault has accounts or newer memory, merging learned items
                     mergeVaultStates(internalState, externalState)
                 }
                 internalState != null -> internalState
@@ -173,8 +173,16 @@ object AiMemoryVault {
                 )
                 else -> AiVaultState()
             }
+            if (clipboardState != null) {
+                resolved = mergeVaultStates(resolved, clipboardState).copy(
+                    lastRestoredFromDeviceMs = System.currentTimeMillis(),
+                )
+            }
             _state.value = resolved
             writeVaultFile(internalFile, resolved)
+            if (resolved.autoPersistAcrossReinstalls && resolved.hasAnyCloudProvider) {
+                writeExternalDeviceVault(appContext, resolved)
+            }
             hydrateCustomWordsIntoDictionary(resolved.customWords)
         }
     }
@@ -665,41 +673,93 @@ object AiMemoryVault {
         }
     }
 
-    private fun readExternalDeviceVault(context: Context): AiVaultState? {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            try {
-                val resolver = context.contentResolver
-                val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
-                val projection = arrayOf(MediaStore.MediaColumns._ID)
-                val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} = ?"
-                val selectionArgs = arrayOf(EXTERNAL_FILE_NAME)
-                resolver.query(
-                    collection,
-                    projection,
-                    selection,
-                    selectionArgs,
-                    "${MediaStore.MediaColumns.DATE_MODIFIED} DESC",
-                )?.use { cursor ->
-                    while (cursor.moveToNext()) {
-                        val id = cursor.getLong(0)
-                        val uri = ContentUris.withAppendedId(collection, id)
-                        val text = resolver.openInputStream(uri)?.use { stream ->
-                            stream.bufferedReader(StandardCharsets.UTF_8).readText()
-                        }
-                        val decoded = text?.let(::decodeEnvelope)
-                        if (decoded != null) return decoded
-                    }
-                }
-            } catch (_: Throwable) {
-            }
-        }
+    private fun readClipboardVaultIfPresent(context: Context): AiVaultState? {
         return try {
-            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            val fallbackFile = File(File(downloadsDir, EXTERNAL_SUBDIR), EXTERNAL_FILE_NAME)
-            readVaultFile(fallbackFile)
+            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            val clipText = cm?.primaryClip?.takeIf { it.itemCount > 0 }
+                ?.getItemAt(0)
+                ?.coerceToText(context)
+                ?.toString()
+                ?.trim()
+                .orEmpty()
+            if (clipText.startsWith(ENVELOPE_PREFIX)) {
+                decodeEnvelope(clipText)
+            } else {
+                val detected = detectApiKeyInText(clipText)
+                if (detected != null) {
+                    val (prov, key) = detected
+                    if (prov == AiProviderType.GEMINI) {
+                        AiVaultState(
+                            geminiConnected = true,
+                            geminiAccountEmail = "Google Gemini Account",
+                            geminiApiKey = key,
+                            lastUpdatedMs = System.currentTimeMillis(),
+                        )
+                    } else {
+                        AiVaultState(
+                            chatGptConnected = true,
+                            chatGptAccountEmail = "OpenAI ChatGPT Account",
+                            chatGptApiKey = key,
+                            lastUpdatedMs = System.currentTimeMillis(),
+                        )
+                    }
+                } else {
+                    null
+                }
+            }
         } catch (_: Throwable) {
             null
         }
+    }
+
+    private fun readExternalDeviceVault(context: Context): AiVaultState? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val collections = listOf(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                MediaStore.Files.getContentUri("external"),
+            )
+            for (collection in collections) {
+                try {
+                    val resolver = context.contentResolver
+                    val projection = arrayOf(MediaStore.MediaColumns._ID)
+                    val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} = ? OR ${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?"
+                    val selectionArgs = arrayOf(EXTERNAL_FILE_NAME, "8002keys_ai_vault%")
+                    resolver.query(
+                        collection,
+                        projection,
+                        selection,
+                        selectionArgs,
+                        "${MediaStore.MediaColumns.DATE_MODIFIED} DESC",
+                    )?.use { cursor ->
+                        while (cursor.moveToNext()) {
+                            val id = cursor.getLong(0)
+                            val uri = ContentUris.withAppendedId(collection, id)
+                            val text = resolver.openInputStream(uri)?.use { stream ->
+                                stream.bufferedReader(StandardCharsets.UTF_8).readText()
+                            }
+                            val decoded = text?.let(::decodeEnvelope)
+                            if (decoded != null) return decoded
+                        }
+                    }
+                } catch (_: Throwable) {
+                }
+            }
+        }
+        val candidateDirs = listOfNotNull(
+            runCatching { Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) }.getOrNull(),
+            runCatching { Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS) }.getOrNull(),
+            File("/storage/emulated/0/Download"),
+            File("/storage/emulated/0/Documents"),
+        )
+        for (dir in candidateDirs) {
+            try {
+                val file = File(File(dir, EXTERNAL_SUBDIR), EXTERNAL_FILE_NAME)
+                val state = readVaultFile(file)
+                if (state != null) return state
+            } catch (_: Throwable) {
+            }
+        }
+        return null
     }
 
     private fun writeExternalDeviceVault(context: Context, state: AiVaultState) {

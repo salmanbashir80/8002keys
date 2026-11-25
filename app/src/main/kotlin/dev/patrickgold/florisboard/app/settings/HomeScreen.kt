@@ -153,6 +153,14 @@ fun HomeScreen() = FlorisScreen {
                 onAction = { InputMethodUtils.showImePicker(context) },
             )
         }
+        SettingsHomeSetupCard(
+            tone = MaterialTheme.colorScheme.primary,
+            icon = Icons.Default.AutoAwesome,
+            title = "Google Gemini & ChatGPT Login • AI Grammar & Memory",
+            summary = "Sign in to Google Gemini & OpenAI ChatGPT inside the app, fix grammar/spelling while typing, resize keyboard, and keep your memory across installs.",
+            actionLabel = "Login Gemini & ChatGPT / Manage AI Memory",
+            onAction = { navController.navigate(Routes.Settings.AiAssistant) },
+        )
         SettingsHomeSearchField(onClick = { navController.navigate(Routes.Settings.Search) })
         SettingsHomeList(entries = settingsHomeEntries())
     }

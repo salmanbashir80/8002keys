@@ -114,6 +114,30 @@ enum class AiWritingTask(
             "same style and language, returning the full combined text (original corrected + continuation). " +
             "Return ONLY the final text.",
     ),
+    WHATSAPP_REPLY(
+        chipLabel = "WhatsApp Reply 💬",
+        systemDirective = "Write a natural, polite, ready-to-send WhatsApp or chat reply to this message in the same " +
+            "language (Roman Urdu or English). Return ONLY the reply.",
+    ),
+    SUMMARIZE_BULLETS(
+        chipLabel = "Bullet Summary •",
+        systemDirective = "Summarize the user's text into clear, concise bullet points. Return ONLY the bullet points.",
+    ),
+    EMAIL_COMPOSER(
+        chipLabel = "Draft Email ✉️",
+        systemDirective = "Convert the user's note (whether written in Roman Urdu or English) into a complete, " +
+            "professional, polite email with greeting, body, and sign-off. Return ONLY the email text.",
+    ),
+    ANSWER_EXPLAIN(
+        chipLabel = "Answer / Explain 💡",
+        systemDirective = "Directly answer the question or explain the topic in the user's text clearly and concisely. " +
+            "Return ONLY the answer.",
+    ),
+    CODE_SCRIPT(
+        chipLabel = "Code / Command 💻",
+        systemDirective = "Generate the exact code snippet, script, or terminal command requested by the user's text. " +
+            "Return ONLY the code or command ready to run.",
+    ),
     CUSTOM_PROMPT(
         chipLabel = "Ask AI ✨",
         systemDirective = "Follow the user's instruction accurately and produce text ready to paste or insert into " +
@@ -562,6 +586,22 @@ object LocalGrammarAndRewriteEngine {
             }
             AiWritingTask.CONTINUE_WRITING -> {
                 ensureTerminalPunctuation(cleaned) + " Let's make sure everything works smoothly from start to finish."
+            }
+            AiWritingTask.WHATSAPP_REPLY -> {
+                "Ji bilkul, main check kar ke abhi batata hoon. Shukriya!"
+            }
+            AiWritingTask.SUMMARIZE_BULLETS -> {
+                val sentences = cleaned.split(Regex("""(?<=[.!?])\s+""")).filter { it.isNotBlank() }
+                if (sentences.size <= 1) "• $cleaned" else sentences.joinToString("\n") { "• ${it.trim()}" }
+            }
+            AiWritingTask.EMAIL_COMPOSER -> {
+                "Hello,\n\n${ensureTerminalPunctuation(cleaned)}\n\nBest regards,"
+            }
+            AiWritingTask.ANSWER_EXPLAIN -> {
+                ensureTerminalPunctuation(cleaned)
+            }
+            AiWritingTask.CODE_SCRIPT -> {
+                cleaned
             }
             AiWritingTask.CUSTOM_PROMPT -> {
                 if (customInstruction.isNotBlank() && inputText.isNotBlank()) {

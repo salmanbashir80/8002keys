@@ -32,6 +32,7 @@ import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -75,6 +76,7 @@ import kotlinx.coroutines.delay
 import org.florisboard.lib.compose.conditional
 import org.florisboard.lib.compose.drawableRes
 import org.florisboard.lib.compose.toDp
+import org.florisboard.lib.snygg.ui.SnyggBox
 import org.florisboard.lib.snygg.ui.SnyggIcon
 import org.florisboard.lib.snygg.ui.SnyggIconButton
 import org.florisboard.lib.snygg.ui.rememberSnyggThemeQuery
@@ -166,23 +168,33 @@ private fun ImeWindowResizeHandle(
     val shadowColor by rememberUpdatedState(style.shadowColor(default = Color.Black))
     val shadowElevation by rememberUpdatedState(style.shadowElevation(default = 8.dp))
 
+    val isHorizontalBar = handle == ImeWindowResizeHandle.TOP || handle == ImeWindowResizeHandle.BOTTOM
     Box(
         modifier = modifier
-            .size(constraints.resizeHandleTouchSize)
+            .then(
+                if (isHorizontalBar) {
+                    Modifier
+                        .fillMaxWidth(0.55f)
+                        .height(constraints.resizeHandleTouchSize)
+                } else {
+                    Modifier.size(constraints.resizeHandleTouchSize)
+                }
+            )
             .imeWindowResizeHandle(windowController, handle)
             .conditional(showWindowResizeHandleBoundaries) {
                 Modifier
                     .background(Color.Yellow)
             }
-            .systemGestureExclusion()
-            .padding(constraints.resizeHandleDrawPadding),
+            .systemGestureExclusion(),
+        contentAlignment = Alignment.Center,
     ) {
         val handleShape = remember(handle, thickness, cornerRadius) {
             handle.shape(thickness, cornerRadius)
         }
         Box(
             modifier = Modifier
-                .matchParentSize()
+                .size(constraints.resizeHandleTouchSize)
+                .padding(constraints.resizeHandleDrawPadding)
                 .graphicsLayer {
                     this.shape = handleShape
                     this.clip = true
@@ -240,6 +252,7 @@ fun BoxScope.ImeWindowResizeHandlesFixed() {
         Box(
             modifier = Modifier
                 .matchParentSize()
+                .imeWindowResizeHandle(windowController, ImeWindowResizeHandle.TOP)
                 .pointerInput(Unit) {
                     while (true) {
                         awaitPointerEventScope {
@@ -251,19 +264,32 @@ fun BoxScope.ImeWindowResizeHandlesFixed() {
                 .background(overlayColor)
         )
 
+        val currentHeightPercent = remember(windowSpec.value) {
+            val spec = windowSpec.value
+            val defH = spec.constraints.defKeyboardHeight.value.coerceAtLeast(1f)
+            ((spec.props.keyboardHeight.value / defH) * 100f).toInt().coerceIn(50, 200)
+        }
+
         Column(
             modifier = Modifier
                 .matchParentSize()
-                .padding(vertical = constraints.resizeHandleTouchSize / 2),
+                .padding(vertical = constraints.resizeHandleTouchSize / 3),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
+            Text(
+                text = "Drag handles or tap size (${currentHeightPercent}%)",
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 ResizeOverlayChip(
-                    label = "−",
+                    label = "− Height",
                     onClick = { windowController.actions.stepFixedHeight((-18).dp) },
                 )
                 SnyggIconButton(
@@ -277,11 +303,13 @@ fun BoxScope.ImeWindowResizeHandlesFixed() {
                     )
                 }
 
-                SnyggIconButton(
-                    FlorisImeUi.WindowMoveHandle.elementName,
+                SnyggBox(
+                    elementName = FlorisImeUi.WindowMoveHandle.elementName,
                     attributes = attributes,
-                    onClick = {},
-                    modifier = Modifier.imeWindowMoveHandle(windowController),
+                    modifier = Modifier
+                        .size(FlorisImeSizing.minInteractiveTouchSize)
+                        .imeWindowMoveHandle(windowController),
+                    contentAlignment = Alignment.Center,
                 ) {
                     SnyggIcon(
                         elementName = FlorisImeUi.WindowMoveHandle.elementName,
@@ -300,13 +328,13 @@ fun BoxScope.ImeWindowResizeHandlesFixed() {
                     )
                 }
                 ResizeOverlayChip(
-                    label = "+",
+                    label = "+ Height",
                     onClick = { windowController.actions.stepFixedHeight(18.dp) },
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 listOf(
@@ -314,12 +342,27 @@ fun BoxScope.ImeWindowResizeHandlesFixed() {
                     "M" to 1.00f,
                     "L" to 1.15f,
                     "XL" to 1.30f,
+                    "XXL" to 1.45f,
                 ).forEach { (label, scale) ->
                     ResizeOverlayChip(
                         label = label,
                         onClick = { windowController.actions.setFixedHeightPreset(scale) },
                     )
                 }
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ResizeOverlayChip(
+                    label = "Bottom ↑",
+                    onClick = { windowController.actions.stepFixedBottomPadding(10.dp) },
+                )
+                ResizeOverlayChip(
+                    label = "Bottom ↓",
+                    onClick = { windowController.actions.stepFixedBottomPadding((-10).dp) },
+                )
                 ResizeOverlayChip(
                     label = "1-Hand",
                     onClick = { windowController.actions.toggleCompactLayout() },

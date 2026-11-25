@@ -75,6 +75,7 @@ import dev.patrickgold.florisboard.ime.ImeUiMode
 import dev.patrickgold.florisboard.ime.keyboard.FlorisImeSizing
 import dev.patrickgold.florisboard.ime.theme.FlorisImeUi
 import dev.patrickgold.florisboard.keyboardManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.florisboard.lib.android.showShortToastSync
 import org.florisboard.lib.snygg.ui.SnyggColumn
@@ -788,5 +789,329 @@ private fun AiSmallActionChip(
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
         )
+    }
+}
+
+/**
+ * Live AI Grammar, Spell Check, Roman Urdu ↔ English, and Resize Quick Strip
+ * displayed directly at the top of the main typing keyboard (`TextInputLayout`).
+ *
+ * Automatically checks the user's active sentence for grammar and spelling errors
+ * (using Gemini / ChatGPT when logged in, plus instant Local AI Grammar Engine)
+ * and lets the user fix, translate, polish, or resize with a single tap while typing.
+ */
+@Composable
+fun LiveAiSmartStrip(
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val keyboardManager by context.keyboardManager()
+    val editorInstance by context.editorInstance()
+    val clipboardManager by context.clipboardManager()
+    val windowController = FlorisImeService.windowControllerOrNull()
+    val scope = rememberCoroutineScope()
+
+    val vaultState by AiMemoryVault.state.collectAsState()
+    val activeContent by editorInstance.activeContentFlow.collectAsState()
+    val primaryClip by clipboardManager.primaryClipFlow.collectAsState()
+
+    LaunchedEffect(Unit) {
+        AiMemoryVault.initialize(context)
+    }
+
+    if (!vaultState.aiGrammarSpellCheckEnabled) return
+
+    val activeSentence = remember(activeContent) {
+        activeContent.selectedText.ifBlank {
+            activeContent.textBeforeSelection
+                .substringAfterLast('\n')
+                .takeLast(280)
+        }
+    }
+
+    val clipboardText = primaryClip?.text?.toString().orEmpty()
+    val detectedKey = remember(clipboardText) {
+        AiMemoryVault.detectApiKeyInText(clipboardText)
+    }
+
+    var liveSuggestion by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var isWorking by remember { mutableStateOf(false) }
+
+    // Real-time automatic grammar & spell check as user types
+    LaunchedEffect(activeSentence, vaultState.hasAnyCloudProvider, vaultState.preferredProvider) {
+        val clean = activeSentence.trim()
+        if (clean.length < 4) {
+            liveSuggestion = null
+            return@LaunchedEffect
+        }
+        val info = editorInstance.activeInfo
+        if (dev.patrickgold.florisboard.ime.smartcompose.SensitiveFieldGuard.isSensitive(info.base.inputType, info.base.imeOptions)) {
+            liveSuggestion = null
+            return@LaunchedEffect
+        }
+
+        // 1. Instant local grammar & spelling check (< 2ms)
+        val localFixed = LocalGrammarAndRewriteEngine.fixGrammarAndSpelling(clean)
+        if (localFixed.isNotBlank() && !localFixed.equals(clean, ignoreCase = false)) {
+            liveSuggestion = clean to localFixed
+        } else {
+            liveSuggestion = null
+        }
+
+        // 2. Debounced Cloud AI (Gemini / ChatGPT) grammar check when logged in & user pauses typing
+        val wordCount = clean.split(Regex("""\s+""")).size
+        if (vaultState.hasAnyCloudProvider && wordCount >= 3 && !keyboardManager.activeState.isIncognitoMode) {
+            delay(1150L)
+            val res = CloudAiClient.executeTask(
+                context = context,
+                task = AiWritingTask.FIX_GRAMMAR_SPELLING,
+                inputText = clean,
+                inputType = info.base.inputType,
+                imeOptions = info.base.imeOptions,
+                isIncognito = false,
+            )
+            val cloudOut = res.outputText.trim()
+            if (res.usedCloud && cloudOut.isNotBlank() && cloudOut != clean) {
+                liveSuggestion = clean to cloudOut
+            }
+        }
+    }
+
+    fun applyTextInEditor(targetToReplace: String, newText: String, taskLabel: String) {
+        val content = editorInstance.activeContent
+        if (content.selectedText.isNotEmpty()) {
+            editorInstance.commitText(newText)
+        } else if (targetToReplace.isNotEmpty() && content.selection.isValid) {
+            val replaceStart = (content.selection.end - targetToReplace.length).coerceAtLeast(0)
+            editorInstance.setSelection(replaceStart, content.selection.end)
+            editorInstance.commitText(newText)
+        } else {
+            editorInstance.commitText(newText)
+        }
+        if (!keyboardManager.activeState.isIncognitoMode && targetToReplace.isNotBlank()) {
+            AiMemoryVault.recordLearnedCorrection(
+                context = context,
+                originalText = targetToReplace,
+                preferredText = newText,
+                taskLabel = taskLabel,
+                isSensitiveOrIncognito = false,
+            )
+        }
+    }
+
+    fun executeInPlaceTask(task: AiWritingTask) {
+        if (isWorking) return
+        val target = activeSentence
+        if (target.isBlank()) {
+            keyboardManager.transitionToImeUiMode(ImeUiMode.AI_ASSISTANT)
+            return
+        }
+        isWorking = true
+        scope.launch {
+            val info = editorInstance.activeInfo
+            val res = CloudAiClient.executeTask(
+                context = context,
+                task = task,
+                inputText = target,
+                inputType = info.base.inputType,
+                imeOptions = info.base.imeOptions,
+                isIncognito = keyboardManager.activeState.isIncognitoMode,
+            )
+            isWorking = false
+            val out = res.outputText.trim()
+            if (out.isNotEmpty()) {
+                applyTextInEditor(target, out, task.chipLabel)
+                liveSuggestion = null
+            }
+        }
+    }
+
+    val stripBg = Color(0xFF0F172A)
+    val pillBg = Color(0xFF1E293B)
+    val accentTeal = Color(0xFF10B981)
+    val accentBlue = Color(0xFF3B82F6)
+    val accentAmber = Color(0xFFF59E0B)
+    val textWhite = Color(0xFFF8FAFC)
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(stripBg)
+            .padding(horizontal = 6.dp, vertical = 3.dp)
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // A. If a Gemini or ChatGPT key was just copied to clipboard, offer 1-tap connect right on the bar
+        if (detectedKey != null) {
+            val (prov, key) = detectedKey
+            val isUnsaved = (prov == AiProviderType.GEMINI && vaultState.geminiApiKey != key) ||
+                (prov == AiProviderType.CHATGPT && vaultState.chatGptApiKey != key)
+            if (isUnsaved) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(accentTeal)
+                        .clickable {
+                            if (prov == AiProviderType.GEMINI) {
+                                AiMemoryVault.connectGemini(context, "Google Gemini", key, vaultState.geminiModel)
+                            } else {
+                                AiMemoryVault.connectChatGpt(context, "OpenAI ChatGPT", key, vaultState.chatGptModel, vaultState.chatGptBaseUrl)
+                            }
+                            context.showShortToastSync("${prov.displayName} connected & saved to memory!")
+                        }
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                ) {
+                    Text(
+                        text = "✨ Connect ${prov.displayName} Key",
+                        color = Color.Black,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                }
+            }
+        }
+
+        // B. Live Auto-Detected Grammar / Spelling Correction Pill (1-tap replaces sentence in editor!)
+        val suggestion = liveSuggestion
+        if (suggestion != null) {
+            val (orig, fixed) = suggestion
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(accentTeal.copy(alpha = 0.22f))
+                    .border(1.dp, accentTeal, RoundedCornerShape(12.dp))
+                    .clickable {
+                        applyTextInEditor(orig, fixed, "Live Grammar Fix")
+                        liveSuggestion = null
+                    }
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+            ) {
+                Text(
+                    text = "✨ Fix: \"${fixed.take(42)}\" ✓",
+                    color = Color(0xFF6EE7B7),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                )
+            }
+        }
+
+        // C. 1-Tap In-Place AI Grammar Fix Pill
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (isWorking) accentAmber.copy(alpha = 0.25f) else accentBlue.copy(alpha = 0.25f))
+                .border(1.dp, if (isWorking) accentAmber else accentBlue, RoundedCornerShape(12.dp))
+                .clickable { executeInPlaceTask(AiWritingTask.FIX_GRAMMAR_SPELLING) }
+                .padding(horizontal = 8.dp, vertical = 3.dp),
+        ) {
+            Text(
+                text = if (isWorking) "AI Fixing..." else "✨ AI Fix",
+                color = textWhite,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+
+        // D. 1-Tap In-Place Roman Urdu -> Clean English
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(pillBg)
+                .clickable { executeInPlaceTask(AiWritingTask.ROMAN_URDU_TO_ENGLISH) }
+                .padding(horizontal = 7.dp, vertical = 3.dp),
+        ) {
+            Text("Roman → EN", color = textWhite, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+        }
+
+        // E. 1-Tap In-Place English -> Roman Urdu
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(pillBg)
+                .clickable { executeInPlaceTask(AiWritingTask.ENGLISH_TO_ROMAN_URDU) }
+                .padding(horizontal = 7.dp, vertical = 3.dp),
+        ) {
+            Text("EN → Roman", color = textWhite, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+        }
+
+        // F. 1-Tap In-Place To Urdu Script (اردو)
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(pillBg)
+                .clickable { executeInPlaceTask(AiWritingTask.TO_URDU_SCRIPT) }
+                .padding(horizontal = 7.dp, vertical = 3.dp),
+        ) {
+            Text("اردو", color = textWhite, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        }
+
+        // G. 1-Tap In-Place Polish & Improve
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(pillBg)
+                .clickable { executeInPlaceTask(AiWritingTask.IMPROVE_WRITING) }
+                .padding(horizontal = 7.dp, vertical = 3.dp),
+        ) {
+            Text("Polish", color = textWhite, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+        }
+
+        // H. 1-Tap In-Place Smart Reply
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(pillBg)
+                .clickable { executeInPlaceTask(AiWritingTask.WHATSAPP_REPLY) }
+                .padding(horizontal = 7.dp, vertical = 3.dp),
+        ) {
+            Text("Reply 💬", color = textWhite, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+        }
+
+        // I. Open Full AI Studio Panel
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(accentTeal.copy(alpha = 0.2f))
+                .border(1.dp, accentTeal.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                .clickable { keyboardManager.transitionToImeUiMode(ImeUiMode.AI_ASSISTANT) }
+                .padding(horizontal = 8.dp, vertical = 3.dp),
+        ) {
+            Text("AI Studio ▾", color = textWhite, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+        }
+
+        // J. 1-Tap Keyboard Resize Toggle right on the main keyboard bar
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(pillBg)
+                .clickable { windowController?.editor?.toggleEnabled() }
+                .padding(horizontal = 7.dp, vertical = 3.dp),
+        ) {
+            Text("⤢ Resize", color = textWhite, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+        }
+
+        // K. Provider Login Status / Settings Shortcut
+        val loginLabel = when {
+            vaultState.isGeminiReady && vaultState.isChatGptReady -> "Gemini+GPT ✓"
+            vaultState.isGeminiReady -> "Gemini ✓"
+            vaultState.isChatGptReady -> "ChatGPT ✓"
+            else -> "Login AI ⚙️"
+        }
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (vaultState.hasAnyCloudProvider) pillBg else accentAmber.copy(alpha = 0.25f))
+                .clickable { launchAiAssistantSettings(context) }
+                .padding(horizontal = 7.dp, vertical = 3.dp),
+        ) {
+            Text(
+                text = loginLabel,
+                color = if (vaultState.hasAnyCloudProvider) Color(0xFF94A3B8) else accentAmber,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
     }
 }

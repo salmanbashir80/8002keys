@@ -75,6 +75,7 @@ fun TextInputLayout(
                 onDone = { keyboardManager.finishTextEntry(submitted = true) },
             )
         } else {
+            dev.patrickgold.florisboard.ime.ai.LiveAiSmartStrip()
             Smartbar()
         }
         if (entrySession != null) {
