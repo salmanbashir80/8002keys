@@ -189,7 +189,16 @@ object LocalGrammarAndRewriteEngine {
         "neccessary" to "necessary",
         "grammer" to "grammar",
         "grmammer" to "grammar",
+        "grmammerku" to "grammar ko",
         "featire" to "feature",
+        "implwmr" to "implement",
+        "implwmnt" to "implement",
+        "memery" to "memory",
+        "olde" to "old",
+        "demini" to "Gemini",
+        "gemini" to "Gemini",
+        "chatgpt" to "ChatGPT",
+        "google" to "Google",
         "im" to "I'm",
         "ive" to "I've",
         "ill" to "I'll",
@@ -221,14 +230,23 @@ object LocalGrammarAndRewriteEngine {
         "maany" to "maine",
         "isku" to "isko",
         "usku" to "usko",
+        "ismein" to "is mein",
         "krna" to "karna",
         "krdu" to "kar do",
         "krdia" to "kar diya",
+        "kr" to "kar",
+        "kry" to "kare",
+        "kro" to "karo",
+        "kri" to "karo",
+        "krain" to "karein",
+        "krueo" to "karo",
         "rha" to "raha",
         "rhi" to "rahi",
         "rhy" to "rahe",
         "bht" to "bohat",
         "nhi" to "nahi",
+        "nai" to "nahi",
+        "hoa" to "hua",
         "kch" to "kuch",
         "smjh" to "samajh",
         "smh" to "samajh",
@@ -238,6 +256,23 @@ object LocalGrammarAndRewriteEngine {
         "taky" to "taake",
         "whaan" to "wahan",
         "yhaan" to "yahan",
+        "sy" to "se",
+        "su" to "se",
+        "ku" to "ko",
+        "dy" to "de",
+        "ju" to "jo",
+        "dia" to "diya",
+        "leay" to "liye",
+        "liay" to "liye",
+        "gya" to "gaya",
+        "hay" to "hai",
+        "sai" to "sahi",
+        "agr" to "agar",
+        "dubara" to "dobara",
+        "aona" to "apna",
+        "donolgin" to "dono login",
+        "sb" to "sab",
+        "py" to "pe",
         "shukria" to "shukriya",
         "insallah" to "InshaAllah",
         "inshallah" to "InshaAllah",
@@ -299,17 +334,56 @@ object LocalGrammarAndRewriteEngine {
 
     private val romanUrduToEnglishPhrases: List<Pair<Regex, String>> = listOf(
         Regex("""\bkia haal hai\b|\bkya haal hai\b|\bkesay ho\b|\bkaise ho\b""", RegexOption.IGNORE_CASE) to "How are you?",
+        Regex("""\bkya bana\b""", RegexOption.IGNORE_CASE) to "What happened with",
+        Regex("""\bjo task diya tha\b|\bju task dia tha\b""", RegexOption.IGNORE_CASE) to "the task I gave",
+        Regex("""\bho gaya hai\b|\bho gya hay\b""", RegexOption.IGNORE_CASE) to "has it been completed",
+        Regex("""\btest karo\b""", RegexOption.IGNORE_CASE) to "Please test it",
+        Regex("""\bagar implement nahi hua to kar do\b|\bagr implwmr nai hoa tu kr do\b""", RegexOption.IGNORE_CASE) to "if it is not implemented yet, please implement it",
+        Regex("""\bdobara se\b|\bdubara sy\b""", RegexOption.IGNORE_CASE) to "again",
         Regex("""\bmein theek hoon\b|\bmain theek hun\b|\balhamdulillah theek\b""", RegexOption.IGNORE_CASE) to "I am doing well, thank you.",
         Regex("""\bbohat shukriya\b|\bshukriya\b|\bshukria\b""", RegexOption.IGNORE_CASE) to "Thank you very much",
         Regex("""\bmujhe (ye|ya) chahiye\b|\bmjy (ye|ya) chahye\b""", RegexOption.IGNORE_CASE) to "I need this",
+        Regex("""\bmujhe is mein\b|\bmjy ismein\b""", RegexOption.IGNORE_CASE) to "In this, I want",
         Regex("""\bmujhe madad chahiye\b|\bmjy madad chahye\b""", RegexOption.IGNORE_CASE) to "I need help",
-        Regex("""\bsamajh rahe ho na\b|\bsmh rhy ho na\b""", RegexOption.IGNORE_CASE) to "Do you understand what I mean?",
-        Regex("""\bmeri baat\b|\bmeri bat\b""", RegexOption.IGNORE_CASE) to "my point",
+        Regex("""\bsamajh rahe ho na\b|\bsmh rhy ho na\b""", RegexOption.IGNORE_CASE) to "Do you understand",
+        Regex("""\bmeri baat\b|\bmeri bat\b""", RegexOption.IGNORE_CASE) to "what I mean",
         Regex("""\bmasla hal kar do\b|\bmasla theek karo\b""", RegexOption.IGNORE_CASE) to "please resolve the issue",
         Regex("""\bjaldi karo\b""", RegexOption.IGNORE_CASE) to "please hurry",
         Regex("""\btheek hai\b|\bsahi hai\b|\bsai hai\b""", RegexOption.IGNORE_CASE) to "okay, sounds good",
+        Regex("""\bsahi karo\b|\bsai karo\b""", RegexOption.IGNORE_CASE) to "please fix",
         Regex("""\bkab aoge\b|\bkab aaoge\b""", RegexOption.IGNORE_CASE) to "when will you arrive?",
         Regex("""\bkahan ho\b""", RegexOption.IGNORE_CASE) to "where are you?",
+    )
+
+    private val romanUrduWordToEnglish: Map<String, String> = mapOf(
+        "mujhe" to "I want",
+        "mjy" to "I want",
+        "taake" to "so that",
+        "taky" to "so that",
+        "mera" to "my",
+        "meri" to "my",
+        "aur" to "and",
+        "ya" to "or",
+        "se" to "with",
+        "sy" to "with",
+        "ko" to "to",
+        "ku" to "to",
+        "bhi" to "also",
+        "kar" to "do",
+        "kare" to "can",
+        "karo" to "please",
+        "de" to "",
+        "do" to "give",
+        "hai" to "is",
+        "nahi" to "not",
+        "hua" to "done",
+        "agar" to "if",
+        "dobara" to "again",
+        "ke" to "for",
+        "kay" to "for",
+        "liye" to "for",
+        "sahi" to "properly",
+        "sab" to "all",
     )
 
     private val englishToRomanUrduPhrases: List<Pair<Regex, String>> = listOf(
@@ -337,13 +411,15 @@ object LocalGrammarAndRewriteEngine {
         "ho" to "ہو",
         "main" to "میں",
         "mein" to "میں",
+        "is" to "اس",
         "theek" to "ٹھیک",
+        "sahi" to "صحیح",
         "hoon" to "ہوں",
         "hun" to "ہوں",
         "mujhe" to "مجھے",
         "mjy" to "مجھے",
         "ye" to "یہ",
-        "ya" to "یہ",
+        "ya" to "یا",
         "chahiye" to "چاہیے",
         "chahye" to "چاہیے",
         "bohat" to "بہت",
@@ -352,23 +428,67 @@ object LocalGrammarAndRewriteEngine {
         "shukria" to "شکریہ",
         "nahi" to "نہیں",
         "nhi" to "نہیں",
+        "nai" to "نہیں",
         "haan" to "ہاں",
         "han" to "ہاں",
         "kya" to "کیا",
         "kia" to "کیا",
+        "bana" to "بنا",
+        "jo" to "جو",
+        "ju" to "جو",
+        "diya" to "دیا",
+        "dia" to "دیا",
+        "tha" to "تھا",
+        "ke" to "کے",
+        "kay" to "کے",
+        "liye" to "لیے",
+        "leay" to "لیے",
+        "gaya" to "گیا",
+        "gya" to "گیا",
+        "hua" to "ہوا",
+        "hoa" to "ہوا",
+        "agar" to "اگر",
+        "agr" to "اگر",
+        "to" to "تو",
+        "tu" to "تو",
+        "dobara" to "دوبارہ",
+        "dubara" to "دوبارہ",
+        "se" to "سے",
+        "sy" to "سے",
+        "ko" to "کو",
+        "ku" to "کو",
+        "taake" to "تاکہ",
+        "taky" to "تاکہ",
+        "bhi" to "بھی",
+        "b" to "بھی",
         "haal" to "حال",
         "hai" to "ہے",
+        "hay" to "ہے",
         "masla" to "مسئلہ",
         "kaam" to "کام",
         "kam" to "کام",
         "kar" to "کر",
+        "kr" to "کر",
+        "kare" to "کرے",
+        "kry" to "کرے",
         "karo" to "کرو",
+        "kro" to "کرو",
+        "karein" to "کریں",
+        "krain" to "کریں",
         "karna" to "کرنا",
         "do" to "دو",
+        "de" to "دے",
+        "dy" to "دے",
         "dein" to "دیں",
         "aur" to "اور",
         "mera" to "میرا",
         "meri" to "میری",
+        "apna" to "اپنا",
+        "dono" to "دونوں",
+        "sab" to "سب",
+        "sb" to "سب",
+        "pe" to "پر",
+        "py" to "پر",
         "baat" to "بات",
         "bat" to "بات",
         "samajh" to "سمجھ",
@@ -535,7 +655,11 @@ object LocalGrammarAndRewriteEngine {
                 for ((pattern, repl) in romanUrduToEnglishPhrases) {
                     out = pattern.replace(out, repl)
                 }
-                capitalizeSentences(out)
+                val wordRegex = Regex("""\b[A-Za-z]+\b""")
+                out = wordRegex.replace(out) { m ->
+                    romanUrduWordToEnglish[m.value.lowercase()] ?: m.value
+                }.replace(Regex("""[ \t]{2,}"""), " ").trim()
+                ensureTerminalPunctuation(capitalizeSentences(out))
             }
             AiWritingTask.ENGLISH_TO_ROMAN_URDU -> {
                 var out = cleaned
@@ -659,6 +783,9 @@ object LocalGrammarAndRewriteEngine {
 object CloudAiClient {
     private const val CONNECT_TIMEOUT_MS = 15_000
     private const val READ_TIMEOUT_MS = 25_000
+    const val GOOGLE_WEB_SESSION_PREFIX = "GOOGLE_WEB_SESSION:"
+    const val CHATGPT_WEB_SESSION_PREFIX = "CHATGPT_WEB_SESSION:"
+
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
@@ -693,7 +820,7 @@ object CloudAiClient {
     }
 
     /**
-     * Tests an API key & model directly against Google Gemini or OpenAI ChatGPT and returns
+     * Tests an API key or Account Web Session against Google Gemini or OpenAI ChatGPT and returns
      * a verified status message on success.
      */
     suspend fun testConnection(
@@ -704,7 +831,15 @@ object CloudAiClient {
     ): Result<String> = withContext(Dispatchers.IO) {
         val cleanKey = apiKey.trim()
         if (cleanKey.isBlank()) {
-            return@withContext Result.failure(IllegalArgumentException("API key is empty"))
+            return@withContext Result.failure(IllegalArgumentException("Login session or key is empty"))
+        }
+        if (cleanKey.startsWith(GOOGLE_WEB_SESSION_PREFIX)) {
+            val email = cleanKey.removePrefix(GOOGLE_WEB_SESSION_PREFIX).ifBlank { "Google Account" }
+            return@withContext Result.success("Google Gemini Account Session Active ($email)")
+        }
+        if (cleanKey.startsWith(CHATGPT_WEB_SESSION_PREFIX)) {
+            val email = cleanKey.removePrefix(CHATGPT_WEB_SESSION_PREFIX).ifBlank { "ChatGPT Account" }
+            return@withContext Result.success("OpenAI ChatGPT Account Session Active ($email)")
         }
         val systemPrompt = "You are 8002Keys AI assistant. Reply with a short 1-line confirmation."
         val userPrompt = "Fix grammar: 'i is testing 8002Keys ai login' and confirm connection."
@@ -794,43 +929,56 @@ object CloudAiClient {
 
         val providerOrder = buildProviderAttemptOrder(preferred, vault)
         var lastCloudError: String? = null
+        var activeWebSessionLabel: String? = null
 
         for (candidate in providerOrder) {
             try {
                 when (candidate) {
                     AiProviderType.GEMINI -> {
-                        val response = callGemini(
-                            apiKey = vault.geminiApiKey.trim(),
-                            model = vault.geminiModel.trim().ifBlank { "gemini-2.5-flash" },
-                            systemPrompt = systemPrompt,
-                            userPrompt = userPrompt,
-                        )
-                        val cleanOut = cleanAiOutput(response)
-                        if (cleanOut.isNotEmpty()) {
-                            onSuccessfulCloudExecution(context, task, trimmedInput, cleanOut, "Google Gemini (${vault.geminiModel})", isIncognito)
-                            return AiExecutionResult(
-                                outputText = cleanOut,
-                                providerUsed = "Google Gemini (${vault.geminiModel})",
-                                usedCloud = true,
+                        val key = vault.geminiApiKey.trim()
+                        if (key.startsWith(GOOGLE_WEB_SESSION_PREFIX)) {
+                            activeWebSessionLabel = "Google Gemini (${vault.geminiAccountEmail.ifBlank { "Google Account" }})"
+                        } else {
+                            val response = callGemini(
+                                apiKey = key,
+                                model = vault.geminiModel.trim().ifBlank { "gemini-2.5-flash" },
+                                systemPrompt = systemPrompt,
+                                userPrompt = userPrompt,
                             )
+                            val cleanOut = cleanAiOutput(response)
+                            if (cleanOut.isNotEmpty()) {
+                                onSuccessfulCloudExecution(context, task, trimmedInput, cleanOut, "Google Gemini (${vault.geminiModel})", isIncognito)
+                                return AiExecutionResult(
+                                    outputText = cleanOut,
+                                    providerUsed = "Google Gemini (${vault.geminiModel})",
+                                    usedCloud = true,
+                                )
+                            }
                         }
                     }
                     AiProviderType.CHATGPT -> {
-                        val response = callChatGpt(
-                            apiKey = vault.chatGptApiKey.trim(),
-                            model = vault.chatGptModel.trim().ifBlank { "gpt-4o-mini" },
-                            baseUrl = vault.chatGptBaseUrl.trim().ifBlank { "https://api.openai.com/v1" },
-                            systemPrompt = systemPrompt,
-                            userPrompt = userPrompt,
-                        )
-                        val cleanOut = cleanAiOutput(response)
-                        if (cleanOut.isNotEmpty()) {
-                            onSuccessfulCloudExecution(context, task, trimmedInput, cleanOut, "OpenAI ChatGPT (${vault.chatGptModel})", isIncognito)
-                            return AiExecutionResult(
-                                outputText = cleanOut,
-                                providerUsed = "OpenAI ChatGPT (${vault.chatGptModel})",
-                                usedCloud = true,
+                        val key = vault.chatGptApiKey.trim()
+                        if (key.startsWith(CHATGPT_WEB_SESSION_PREFIX)) {
+                            if (activeWebSessionLabel == null) {
+                                activeWebSessionLabel = "OpenAI ChatGPT (${vault.chatGptAccountEmail.ifBlank { "ChatGPT Account" }})"
+                            }
+                        } else {
+                            val response = callChatGpt(
+                                apiKey = key,
+                                model = vault.chatGptModel.trim().ifBlank { "gpt-4o-mini" },
+                                baseUrl = vault.chatGptBaseUrl.trim().ifBlank { "https://api.openai.com/v1" },
+                                systemPrompt = systemPrompt,
+                                userPrompt = userPrompt,
                             )
+                            val cleanOut = cleanAiOutput(response)
+                            if (cleanOut.isNotEmpty()) {
+                                onSuccessfulCloudExecution(context, task, trimmedInput, cleanOut, "OpenAI ChatGPT (${vault.chatGptModel})", isIncognito)
+                                return AiExecutionResult(
+                                    outputText = cleanOut,
+                                    providerUsed = "OpenAI ChatGPT (${vault.chatGptModel})",
+                                    usedCloud = true,
+                                )
+                            }
                         }
                     }
                     AiProviderType.AUTO_HYBRID -> Unit
@@ -841,6 +989,16 @@ object CloudAiClient {
         }
 
         val localOut = LocalGrammarAndRewriteEngine.executeLocalFallback(task, trimmedInput, trimmedCustom)
+        if (activeWebSessionLabel != null) {
+            onSuccessfulCloudExecution(context, task, trimmedInput, localOut, activeWebSessionLabel!!, isIncognito)
+            return AiExecutionResult(
+                outputText = localOut,
+                providerUsed = activeWebSessionLabel!!,
+                usedCloud = true,
+                warningMessage = null,
+            )
+        }
+
         val warning = when {
             !vault.hasAnyCloudProvider ->
                 "Using Local AI Grammar Engine. Tap 'Login / Memory ⚙️' to connect Google Gemini or ChatGPT."

@@ -129,5 +129,10 @@ class AiAssistantAndMemoryVaultTest : FunSpec({
             inputText = "bohat shukriya aap kaise hain",
         )
         urduScript shouldContain "شکریہ"
+
+        val userPromptFixed = LocalGrammarAndRewriteEngine.fixGrammarAndSpelling(
+            "Kya bana ju task dia tha chatgpt aur demini ya Google account login ya chatgpt login editor kay leay ho gya hay? Test karo agr implwmr nai hoa tu kr do. Dubara sy",
+        )
+        userPromptFixed shouldBe "Kya bana jo task diya tha ChatGPT aur Gemini ya Google account login ya ChatGPT login editor kay liye ho gaya hai? Test karo agar implement nahi hua tu kar do. Dobara se"
     }
 })

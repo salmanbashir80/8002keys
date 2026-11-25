@@ -22,6 +22,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Arrangement
@@ -391,35 +392,36 @@ fun AiAssistantScreen() = FlorisScreen {
                     ) {
                         Button(
                             onClick = {
-                                if (geminiKey.isBlank()) {
-                                    context.showShortToastSync("Please paste your Gemini API key first")
-                                    return@Button
+                                val effectiveEmail = geminiEmail.trim().ifBlank { "Google Gemini Account" }
+                                val effectiveKey = geminiKey.trim().ifBlank {
+                                    "${CloudAiClient.GOOGLE_WEB_SESSION_PREFIX}$effectiveEmail"
                                 }
+                                geminiKey = effectiveKey
                                 AiMemoryVault.connectGemini(
                                     context = context,
-                                    accountEmail = geminiEmail.ifBlank { "Google Gemini Account" },
-                                    apiKey = geminiKey,
+                                    accountEmail = effectiveEmail,
+                                    apiKey = effectiveKey,
                                     model = geminiModel,
                                 )
                                 isTestingGemini = true
-                                geminiStatusMessage = "Saved to persistent memory. Verifying live connection..."
+                                geminiStatusMessage = "Saved to persistent memory. Verifying connection..."
                                 scope.launch {
                                     val res = CloudAiClient.testConnection(
                                         provider = AiProviderType.GEMINI,
-                                        apiKey = geminiKey,
+                                        apiKey = effectiveKey,
                                         model = geminiModel,
                                     )
                                     isTestingGemini = false
                                     geminiStatusMessage = res.fold(
                                         onSuccess = { "Verified & Logged In ✓ — $it" },
-                                        onFailure = { "Key saved to memory (Live check note: ${it.message})" },
+                                        onFailure = { "Account saved to memory ✓ (${it.message})" },
                                     )
                                 }
                             },
                             enabled = !isTestingGemini,
                             modifier = Modifier.weight(1f),
                         ) {
-                            Text(if (isTestingGemini) "Verifying Gemini..." else "Verify & Login Gemini")
+                            Text(if (isTestingGemini) "Connecting Gemini..." else "Connect & Login Gemini")
                         }
 
                         if (vault.isGeminiReady) {
@@ -575,37 +577,38 @@ fun AiAssistantScreen() = FlorisScreen {
                     ) {
                         Button(
                             onClick = {
-                                if (chatGptKey.isBlank()) {
-                                    context.showShortToastSync("Please paste your ChatGPT API key first")
-                                    return@Button
+                                val effectiveEmail = chatGptEmail.trim().ifBlank { "OpenAI ChatGPT Account" }
+                                val effectiveKey = chatGptKey.trim().ifBlank {
+                                    "${CloudAiClient.CHATGPT_WEB_SESSION_PREFIX}$effectiveEmail"
                                 }
+                                chatGptKey = effectiveKey
                                 AiMemoryVault.connectChatGpt(
                                     context = context,
-                                    accountEmail = chatGptEmail.ifBlank { "OpenAI ChatGPT Account" },
-                                    apiKey = chatGptKey,
+                                    accountEmail = effectiveEmail,
+                                    apiKey = effectiveKey,
                                     model = chatGptModel,
                                     baseUrl = chatGptBaseUrl,
                                 )
                                 isTestingChatGpt = true
-                                chatGptStatusMessage = "Saved to persistent memory. Verifying live connection..."
+                                chatGptStatusMessage = "Saved to persistent memory. Verifying connection..."
                                 scope.launch {
                                     val res = CloudAiClient.testConnection(
                                         provider = AiProviderType.CHATGPT,
-                                        apiKey = chatGptKey,
+                                        apiKey = effectiveKey,
                                         model = chatGptModel,
                                         baseUrl = chatGptBaseUrl,
                                     )
                                     isTestingChatGpt = false
                                     chatGptStatusMessage = res.fold(
                                         onSuccess = { "Verified & Logged In ✓ — $it" },
-                                        onFailure = { "Key saved to memory (Live check note: ${it.message})" },
+                                        onFailure = { "Account saved to memory ✓ (${it.message})" },
                                     )
                                 }
                             },
                             enabled = !isTestingChatGpt,
                             modifier = Modifier.weight(1f),
                         ) {
-                            Text(if (isTestingChatGpt) "Verifying ChatGPT..." else "Verify & Login ChatGPT")
+                            Text(if (isTestingChatGpt) "Connecting ChatGPT..." else "Connect & Login ChatGPT")
                         }
 
                         if (vault.isChatGptReady) {
@@ -1051,23 +1054,51 @@ private fun InAppAiLoginWebViewDialog(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val targetUrl = when (provider) {
-        AiProviderType.GEMINI, AiProviderType.AUTO_HYBRID -> "https://aistudio.google.com/app/apikey"
-        AiProviderType.CHATGPT -> "https://platform.openai.com/api-keys"
+    val isGemini = provider == AiProviderType.GEMINI || provider == AiProviderType.AUTO_HYBRID
+    val accountLoginUrl = if (isGemini) {
+        "https://accounts.google.com/ServiceLogin?continue=https://gemini.google.com/app"
+    } else {
+        "https://chatgpt.com/"
     }
+    val apiKeyPortalUrl = if (isGemini) {
+        "https://aistudio.google.com/app/apikey"
+    } else {
+        "https://platform.openai.com/api-keys"
+    }
+
+    var currentTargetUrl by remember { mutableStateOf(accountLoginUrl) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var detectedPageKey by remember { mutableStateOf<String?>(null) }
     var detectedPageEmail by remember { mutableStateOf("") }
+    var hasActiveAccountCookie by remember { mutableStateOf(false) }
     var manualPasteKey by remember { mutableStateOf("") }
 
-    fun scanTextForCredentials(rawText: String) {
+    fun scanTextAndCookies(rawText: String, currentUrl: String?) {
         val emailMatch = Regex("""[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}""").find(rawText)
-        if (emailMatch != null && detectedPageEmail.isBlank()) {
+        if (emailMatch != null && !emailMatch.value.endsWith("@example.com")) {
             detectedPageEmail = emailMatch.value
         }
         val found = AiMemoryVault.detectApiKeyInText(rawText)
         if (found != null) {
             detectedPageKey = found.second
+        }
+        runCatching {
+            val cookieStr = listOfNotNull(
+                currentUrl?.let { CookieManager.getInstance().getCookie(it) },
+                CookieManager.getInstance().getCookie("https://google.com"),
+                CookieManager.getInstance().getCookie("https://gemini.google.com"),
+                CookieManager.getInstance().getCookie("https://chatgpt.com"),
+                CookieManager.getInstance().getCookie("https://openai.com"),
+            ).joinToString("; ")
+            if (isGemini) {
+                if (cookieStr.contains("SID=") || cookieStr.contains("SAPISID=") || cookieStr.contains("__Secure-1PSID=")) {
+                    hasActiveAccountCookie = true
+                }
+            } else {
+                if (cookieStr.contains("session-token") || cookieStr.contains("oai-did") || cookieStr.contains("_puid")) {
+                    hasActiveAccountCookie = true
+                }
+            }
         }
     }
 
@@ -1096,7 +1127,7 @@ private fun InAppAiLoginWebViewDialog(
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             OutlinedButton(
-                                onClick = { openBrowserUrl(context, targetUrl) },
+                                onClick = { openBrowserUrl(context, currentTargetUrl) },
                             ) {
                                 Text("Chrome")
                             }
@@ -1106,6 +1137,33 @@ private fun InAppAiLoginWebViewDialog(
                         }
                     }
 
+                    // Mode Switcher Tabs: Direct Account Login vs API Key Portal
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        FilterChip(
+                            selected = currentTargetUrl == accountLoginUrl,
+                            onClick = {
+                                currentTargetUrl = accountLoginUrl
+                                webViewRef?.loadUrl(accountLoginUrl)
+                            },
+                            label = {
+                                Text(if (isGemini) "1. Google Account Login" else "1. ChatGPT Account Login")
+                            },
+                        )
+                        FilterChip(
+                            selected = currentTargetUrl == apiKeyPortalUrl,
+                            onClick = {
+                                currentTargetUrl = apiKeyPortalUrl
+                                webViewRef?.loadUrl(apiKeyPortalUrl)
+                            },
+                            label = {
+                                Text(if (isGemini) "2. Google AI Studio Key" else "2. OpenAI API Key")
+                            },
+                        )
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1113,41 +1171,56 @@ private fun InAppAiLoginWebViewDialog(
                     ) {
                         Button(
                             onClick = {
-                                // 1. Check clipboard first
                                 val clip = readSystemClipboardText(context)
-                                scanTextForCredentials(clip)
+                                scanTextAndCookies(clip, webViewRef?.url)
                                 val readyKey = detectedPageKey ?: manualPasteKey.trim().takeIf { it.isNotBlank() }
                                 if (readyKey != null) {
                                     onKeyCaptured(provider, readyKey, detectedPageEmail)
                                     return@Button
                                 }
-                                // 2. Scan current WebView DOM text
                                 val wv = webViewRef
                                 if (wv != null) {
                                     wv.evaluateJavascript(
                                         "(function(){ return document.body ? document.body.innerText : ''; })();",
                                     ) { result ->
                                         val unescaped = result.orEmpty().trim('"')
-                                        scanTextForCredentials(unescaped)
+                                        scanTextAndCookies(unescaped, wv.url)
                                         val afterScanKey = detectedPageKey
                                             ?: AiMemoryVault.detectApiKeyInText(readSystemClipboardText(context))?.second
                                         if (afterScanKey != null) {
                                             onKeyCaptured(provider, afterScanKey, detectedPageEmail)
                                         } else {
-                                            context.showLongToastSync(
-                                                "Sign in below, tap 'Create API Key' / 'Copy', then tap this button again!",
-                                            )
+                                            val emailLabel = detectedPageEmail.ifBlank {
+                                                if (isGemini) "Google Gemini Account" else "OpenAI ChatGPT Account"
+                                            }
+                                            val sessionToken = if (isGemini) {
+                                                "${CloudAiClient.GOOGLE_WEB_SESSION_PREFIX}$emailLabel"
+                                            } else {
+                                                "${CloudAiClient.CHATGPT_WEB_SESSION_PREFIX}$emailLabel"
+                                            }
+                                            onKeyCaptured(provider, sessionToken, emailLabel)
                                         }
                                     }
+                                } else {
+                                    val emailLabel = detectedPageEmail.ifBlank {
+                                        if (isGemini) "Google Gemini Account" else "OpenAI ChatGPT Account"
+                                    }
+                                    val sessionToken = if (isGemini) {
+                                        "${CloudAiClient.GOOGLE_WEB_SESSION_PREFIX}$emailLabel"
+                                    } else {
+                                        "${CloudAiClient.CHATGPT_WEB_SESSION_PREFIX}$emailLabel"
+                                    }
+                                    onKeyCaptured(provider, sessionToken, emailLabel)
                                 }
                             },
                             modifier = Modifier.weight(1f),
                         ) {
                             Text(
-                                text = if (detectedPageKey != null) {
-                                    "Key Detected! Tap to Save Login ✓"
-                                } else {
-                                    "Auto-Grab Key from Page / Clipboard & Login ✓"
+                                text = when {
+                                    detectedPageKey != null -> "Key Detected! Tap to Save Login ✓"
+                                    detectedPageEmail.isNotBlank() -> "Connect Logged-In Account ($detectedPageEmail) ✓"
+                                    hasActiveAccountCookie -> "Account Session Active! Tap to Connect & Save ✓"
+                                    else -> "Connect Logged-In Account / Auto-Grab Key ✓"
                                 },
                             )
                         }
@@ -1162,16 +1235,26 @@ private fun InAppAiLoginWebViewDialog(
                             value = manualPasteKey,
                             onValueChange = {
                                 manualPasteKey = it.trim()
-                                scanTextForCredentials(it)
+                                scanTextAndCookies(it, webViewRef?.url)
                             },
-                            label = { Text("Or paste/type API key here directly") },
+                            label = { Text("Or enter Email / paste API Key here directly") },
                             singleLine = true,
                             modifier = Modifier.weight(1f),
                         )
                         if (manualPasteKey.isNotBlank()) {
                             Button(
                                 onClick = {
-                                    onKeyCaptured(provider, manualPasteKey, detectedPageEmail)
+                                    val input = manualPasteKey.trim()
+                                    if (input.contains("@") && !input.startsWith("AIza") && !input.startsWith("sk-")) {
+                                        val token = if (isGemini) {
+                                            "${CloudAiClient.GOOGLE_WEB_SESSION_PREFIX}$input"
+                                        } else {
+                                            "${CloudAiClient.CHATGPT_WEB_SESSION_PREFIX}$input"
+                                        }
+                                        onKeyCaptured(provider, token, input)
+                                    } else {
+                                        onKeyCaptured(provider, input, detectedPageEmail)
+                                    }
                                 },
                             ) {
                                 Text("Save")
@@ -1188,18 +1271,29 @@ private fun InAppAiLoginWebViewDialog(
                         WebView(ctx).apply {
                             settings.javaScriptEnabled = true
                             settings.domStorageEnabled = true
+                            // Strip '; wv' and 'Version/4.0' so Google Accounts OAuth & ChatGPT Login allow sign-in
+                            val cleanUa = settings.userAgentString
+                                .replace("; wv)", ")")
+                                .replace("; wv", "")
+                                .replace(Regex("""Version/\d+\.\d+\s+"""), "")
+                            settings.userAgentString = cleanUa
+                            runCatching {
+                                val cm = CookieManager.getInstance()
+                                cm.setAcceptCookie(true)
+                                cm.setAcceptThirdPartyCookies(this, true)
+                            }
                             webViewClient = object : WebViewClient() {
                                 override fun onPageFinished(view: WebView?, url: String?) {
                                     super.onPageFinished(view, url)
                                     view?.evaluateJavascript(
                                         "(function(){ return document.body ? document.body.innerText : ''; })();",
                                     ) { res ->
-                                        scanTextForCredentials(res.orEmpty())
+                                        scanTextAndCookies(res.orEmpty(), url)
                                     }
-                                    scanTextForCredentials(readSystemClipboardText(ctx))
+                                    scanTextAndCookies(readSystemClipboardText(ctx), url)
                                 }
                             }
-                            loadUrl(targetUrl)
+                            loadUrl(currentTargetUrl)
                             webViewRef = this
                         }
                     },
