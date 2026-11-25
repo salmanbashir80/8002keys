@@ -193,6 +193,8 @@ fun AiAssistantScreen() = FlorisScreen {
     }
 
     content {
+        dev.patrickgold.florisboard.app.update.AppUpdateHost(autoCheckOnMount = true)
+        dev.patrickgold.florisboard.app.update.AppUpdateBannerCard()
         Column(
             modifier = Modifier
                 .fillMaxWidth()

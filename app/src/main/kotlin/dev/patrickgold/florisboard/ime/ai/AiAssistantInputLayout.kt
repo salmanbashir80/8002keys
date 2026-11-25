@@ -814,9 +814,14 @@ fun LiveAiSmartStrip(
     val vaultState by AiMemoryVault.state.collectAsState()
     val activeContent by editorInstance.activeContentFlow.collectAsState()
     val primaryClip by clipboardManager.primaryClipFlow.collectAsState()
+    val latestUpdate by dev.patrickgold.florisboard.app.update.AppUpdateManager.latestUpdateFlow.collectAsState()
 
     LaunchedEffect(Unit) {
         AiMemoryVault.initialize(context)
+        dev.patrickgold.florisboard.app.update.AppUpdateManager.triggerBackgroundCheck(
+            force = false,
+            autoPopupIfAvailable = false,
+        )
     }
 
     if (!vaultState.aiGrammarSpellCheckEnabled) return
@@ -942,6 +947,29 @@ fun LiveAiSmartStrip(
         horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // 0. If a new 8002Keys cloud build update is available on GitHub, show 1-tap Auto-Update pill right on keyboard!
+        val updateInfo = latestUpdate
+        if (updateInfo != null && updateInfo.isUpdateAvailable) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(accentAmber)
+                    .clickable {
+                        FlorisImeService.hideUi()
+                        dev.patrickgold.florisboard.app.update.AppUpdateManager.openAppAndShowUpdateDialog(context)
+                    }
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+            ) {
+                val updatePillLabel = "🚀 Update Ready (${updateInfo.remoteShortCommit})"
+                Text(
+                    text = updatePillLabel,
+                    color = Color.Black,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+            }
+        }
+
         // A. If a Gemini or ChatGPT key was just copied to clipboard, offer 1-tap connect right on the bar
         if (detectedKey != null) {
             val (prov, key) = detectedKey

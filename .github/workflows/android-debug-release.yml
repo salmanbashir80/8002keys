@@ -69,18 +69,37 @@ jobs:
           APK_SHA=$(sha256sum dist/8002Keys-v1.9.70-debug.apk | awk '{print $1}')
           APK_SIZE=$(stat -c%s dist/8002Keys-v1.9.70-debug.apk)
           SHORT_SHA=$(git rev-parse --short HEAD)
-          cat > dist/build-info.json <<EOF
-          {
-            "packageName": "com.salmanbashir.keys8002",
-            "appName": "8002Keys",
-            "versionName": "1.9.70-debug+${SHORT_SHA}",
-            "versionCode": 2119,
-            "commit": "${GITHUB_SHA}",
-            "apkSha256": "${APK_SHA}",
-            "apkSizeBytes": ${APK_SIZE},
-            "channel": "debug-prerelease"
-          }
-          EOF
+          COMMIT_MSG=$(git log -1 --pretty=%s)
+          PUBLISHED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          jq -n \
+            --arg packageName "com.salmanbashir.keys8002" \
+            --arg appName "8002Keys" \
+            --arg versionName "1.9.70-debug+${SHORT_SHA}" \
+            --argjson versionCode 2119 \
+            --arg commit "${GITHUB_SHA}" \
+            --arg shortCommit "${SHORT_SHA}" \
+            --arg commitMessage "${COMMIT_MSG}" \
+            --arg publishedAt "${PUBLISHED_AT}" \
+            --arg apkSha256 "${APK_SHA}" \
+            --argjson apkSizeBytes "${APK_SIZE}" \
+            --arg downloadUrl "https://github.com/salmanbashir80/8002keys/releases/download/v1.9.70-debug.1/8002Keys-v1.9.70-debug.apk" \
+            --arg releasePageUrl "https://github.com/salmanbashir80/8002keys/releases/tag/v1.9.70-debug.1" \
+            --arg channel "debug-prerelease" \
+            '{
+              packageName: $packageName,
+              appName: $appName,
+              versionName: $versionName,
+              versionCode: $versionCode,
+              commit: $commit,
+              shortCommit: $shortCommit,
+              commitMessage: $commitMessage,
+              publishedAt: $publishedAt,
+              apkSha256: $apkSha256,
+              apkSizeBytes: $apkSizeBytes,
+              downloadUrl: $downloadUrl,
+              releasePageUrl: $releasePageUrl,
+              channel: $channel
+            }' > dist/build-info.json
           echo "apk_sha=$APK_SHA" >> "$GITHUB_ENV"
           echo "short_sha=$SHORT_SHA" >> "$GITHUB_ENV"
 
@@ -98,4 +117,4 @@ jobs:
             --prerelease \
             --target "${GITHUB_SHA}" \
             --title "8002Keys v1.9.70-debug+${short_sha} (Debug Prerelease)" \
-            --notes "Debug-signed APK (`com.salmanbashir.keys8002`) built from `${short_sha}`. SHA-256: `${apk_sha}`. Includes rebranded 8002Keys identity, offline Roman Urdu + English support, Google Gemini & OpenAI ChatGPT Login, AI Grammar & Spell Checker, Persistent Account & AI Memory Vault across reinstalls, In-Keyboard AI Writing Studio (AI ✨), and fixed Keyboard Resize."
+            --notes "Debug-signed APK (`com.salmanbashir.keys8002`) built from `${short_sha}`. SHA-256: `${apk_sha}`. Includes rebranded 8002Keys identity, Auto-Update Manager & Live Update Alerts, offline Roman Urdu + English support, Google Gemini & OpenAI ChatGPT Login, AI Grammar & Spell Checker, Persistent Account & AI Memory Vault across reinstalls, In-Keyboard AI Writing Studio (AI ✨), and fixed Keyboard Resize."

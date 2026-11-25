@@ -135,4 +135,43 @@ class AiAssistantAndMemoryVaultTest : FunSpec({
         )
         userPromptFixed shouldBe "Kya bana jo task diya tha ChatGPT aur Gemini ya Google account login ya ChatGPT login editor kay liye ho gaya hai? Test karo agar implement nahi hua tu kar do. Dobara se"
     }
+
+    test("AppUpdateManager detects when a new cloud build commit is available on GitHub") {
+        val sampleBuildInfo = """
+            {
+              "packageName": "com.salmanbashir.keys8002",
+              "appName": "8002Keys",
+              "versionName": "1.9.70-debug+f9a1c2d",
+              "versionCode": 2119,
+              "commit": "f9a1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9",
+              "shortCommit": "f9a1c2d",
+              "commitMessage": "feat(update): add auto-update popup and live GitHub cloud build checker",
+              "publishedAt": "2026-11-25T16:50:00Z",
+              "apkSha256": "907542b345750d1428fe1ac36cdaaacdb714f8d3794561a58361d761db14f0be",
+              "apkSizeBytes": 67348225,
+              "downloadUrl": "https://github.com/salmanbashir80/8002keys/releases/download/v1.9.70-debug.1/8002Keys-v1.9.70-debug.apk"
+            }
+        """.trimIndent()
+
+        val updateDetected = dev.patrickgold.florisboard.app.update.AppUpdateManager.parseBuildInfoJson(
+            jsonText = sampleBuildInfo,
+            installedCommit = "db6603ba11223344556677889900aabbccddeeff",
+            installedVersionCode = 2119,
+            installedVersionName = "1.9.70-debug+db6603b",
+        )
+        updateDetected shouldNotBe null
+        updateDetected!!.isUpdateAvailable shouldBe true
+        updateDetected.remoteShortCommit shouldBe "f9a1c2d"
+        updateDetected.commitMessage shouldContain "auto-update popup"
+
+        val upToDate = dev.patrickgold.florisboard.app.update.AppUpdateManager.parseBuildInfoJson(
+            jsonText = sampleBuildInfo,
+            installedCommit = "f9a1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9",
+            installedVersionCode = 2119,
+            installedVersionName = "1.9.70-debug+f9a1c2d",
+        )
+        upToDate shouldNotBe null
+        upToDate!!.isUpdateAvailable shouldBe false
+    }
 })
+

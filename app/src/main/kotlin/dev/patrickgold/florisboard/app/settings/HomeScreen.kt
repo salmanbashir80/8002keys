@@ -102,6 +102,9 @@ import dev.patrickgold.florisboard.app.settings.smartbar.SmartbarScreen
 import dev.patrickgold.florisboard.app.settings.theme.ThemeScreen
 import dev.patrickgold.florisboard.app.settings.typing.TypingScreen
 import dev.patrickgold.florisboard.app.settings.voice.VoiceInputScreen
+import dev.patrickgold.florisboard.app.update.AppUpdateBannerCard
+import dev.patrickgold.florisboard.app.update.AppUpdateHost
+import dev.patrickgold.florisboard.app.update.AppUpdateManager
 import dev.patrickgold.florisboard.lib.compose.FlorisScreen
 import dev.patrickgold.florisboard.lib.compose.LocalFlorisScreenEmbedded
 import dev.patrickgold.florisboard.lib.util.InputMethodUtils
@@ -135,6 +138,8 @@ fun HomeScreen() = FlorisScreen {
     }
 
     content {
+        AppUpdateHost(autoCheckOnMount = true)
+        AppUpdateBannerCard()
         when {
             !isFlorisBoardEnabled -> SettingsHomeSetupCard(
                 tone = MaterialTheme.colorScheme.error,
@@ -213,6 +218,16 @@ private fun settingsHomeEntries(): List<SettingsHomeEntry> {
             title = "AI Assistant, Gemini & ChatGPT Login",
             summary = "Google Gemini & ChatGPT login, AI grammar/spell check, and persistent memory across installs",
             onClick = { navController.navigate(Routes.Settings.AiAssistant) },
+        ),
+        SettingsHomeEntry.Link(
+            id = "auto-update",
+            icon = Icons.Default.Sync,
+            title = "Auto-Update & Cloud Build Checker",
+            summary = "Check for new 8002Keys GitHub cloud builds and install updates in 1 tap",
+            onClick = {
+                AppUpdateManager.openUpdateDialog()
+                AppUpdateManager.triggerBackgroundCheck(force = true, autoPopupIfAvailable = true)
+            },
         ),
         SettingsHomeEntry.Page(
             id = "keyboard",

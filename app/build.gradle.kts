@@ -20,6 +20,7 @@ import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import groovy.json.JsonSlurper
 import java.io.File
 import java.nio.charset.StandardCharsets
+import java.util.Base64
 import java.util.zip.ZipFile
 import org.gradle.api.tasks.testing.logging.TestLogEvent
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -140,6 +141,18 @@ configure<ApplicationExtension> {
     // signs it. Debug-signing it here would hand F-Droid a signature it did not
     // make, under a filename its recipe does not name.
     signingConfigs {
+        val debugKeystoreB64 = file("src/main/config/debug-signing.b64")
+        if (debugKeystoreB64.isFile) {
+            val deterministicDebugKeystore = layout.buildDirectory.file("signing/debug.keystore").get().asFile
+            if (!deterministicDebugKeystore.isFile) {
+                deterministicDebugKeystore.parentFile?.mkdirs()
+                val decoded = Base64.getDecoder().decode(debugKeystoreB64.readText().trim())
+                deterministicDebugKeystore.writeBytes(decoded)
+            }
+            getByName("debug") {
+                storeFile = deterministicDebugKeystore
+            }
+        }
         val keystorePath = System.getenv("KEYSTORE_PATH")
         if (!keystorePath.isNullOrBlank()) {
             create("release") {

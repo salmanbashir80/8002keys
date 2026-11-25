@@ -218,6 +218,14 @@ class FlorisAppActivity : ComponentActivity() {
         externalIntents.save(outState)
     }
 
+    override fun onResume() {
+        super.onResume()
+        dev.patrickgold.florisboard.app.update.AppUpdateManager.triggerBackgroundCheck(
+            force = false,
+            autoPopupIfAvailable = true,
+        )
+    }
+
     override fun onPause() {
         super.onPause()
 
