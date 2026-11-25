@@ -297,9 +297,7 @@ fun QuickActionsOverflowPanel() {
             drawableRes = R.drawable.ic_incognito,
             isActive = isIncognito,
             onClick = {
-                keyboardManager.handleHardwareOrSoftwareKeyEvent(
-                    TextKeyData(code = KeyCode.TOGGLE_INCOGNITO_MODE),
-                )
+                keyboardManager.inputEventDispatcher.sendDownUp(TextKeyData.TOGGLE_INCOGNITO_MODE)
             },
         ),
         "resize" to SwiftKeyGridTile(
