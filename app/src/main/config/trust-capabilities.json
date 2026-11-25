@@ -12,6 +12,7 @@
       "android.permission.POST_NOTIFICATIONS",
       "android.permission.QUERY_ADVANCED_PROTECTION_MODE",
       "android.permission.READ_CALENDAR",
+      "android.permission.REQUEST_INSTALL_PACKAGES",
       "android.permission.VIBRATE",
       "com.salmanbashir.keys8002.permission.BIND_MCP"
     ],
@@ -35,6 +36,7 @@
     "signaturePermissionPrefix": "com.salmanbashir.keys8002.permission.",
     "baseManifestPermissions": [
       "android.permission.INTERNET",
+      "android.permission.REQUEST_INSTALL_PACKAGES",
       "com.salmanbashir.keys8002.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
       "com.salmanbashir.keys8002.bench.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
     ],

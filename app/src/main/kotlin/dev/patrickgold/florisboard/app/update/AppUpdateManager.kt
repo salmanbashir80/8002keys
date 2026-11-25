@@ -500,14 +500,18 @@ object AppUpdateManager {
                 throw IllegalStateException("APK SHA-256 mismatch (expected ${info.apkSha256.take(10)}..., got ${computedSha256.take(10)}...)")
             }
 
-            // Also copy the verified APK into Public Downloads/8002Keys so user can install from Files/Downloads anytime
-            runCatching { copyApkToPublicDownloads(context, targetApk, info.remoteShortCommit) }
+            val publicDownloadUri = runCatching {
+                copyApkToPublicDownloads(context, targetApk, info.remoteShortCommit)
+            }.getOrNull()
 
+            _downloadedApkFileFlow.value = targetApk
+            _downloadedPublicUriFlow.value = publicDownloadUri
             _downloadProgressFlow.value = 100
-            _statusMessageFlow.value = "Download complete (SHA-256 verified). Launching installer..."
+            _statusMessageFlow.value =
+                "✓ APK saved to Downloads/8002Keys/8002Keys-v1.9.70-${info.remoteShortCommit}.apk. Launching installer..."
 
             withContext(Dispatchers.Main) {
-                launchApkInstallerWithFallback(context, targetApk, info.downloadUrl)
+                launchApkInstallerWithFallback(context, targetApk, publicDownloadUri, info.downloadUrl)
             }
             targetApk
         }.onFailure { err ->
@@ -520,7 +524,13 @@ object AppUpdateManager {
         }
     }
 
-    private fun copyApkToPublicDownloads(context: Context, sourceApk: File, shortCommit: String) {
+    private val _downloadedApkFileFlow = MutableStateFlow<File?>(null)
+    val downloadedApkFileFlow: StateFlow<File?> = _downloadedApkFileFlow.asStateFlow()
+
+    private val _downloadedPublicUriFlow = MutableStateFlow<Uri?>(null)
+    val downloadedPublicUriFlow: StateFlow<Uri?> = _downloadedPublicUriFlow.asStateFlow()
+
+    private fun copyApkToPublicDownloads(context: Context, sourceApk: File, shortCommit: String): Uri? {
         val fileName = if (shortCommit.isNotBlank()) {
             "8002Keys-v1.9.70-$shortCommit.apk"
         } else {
@@ -534,32 +544,85 @@ object AppUpdateManager {
                 put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/8002Keys")
                 put(MediaStore.Downloads.IS_PENDING, 1)
             }
-            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return null
             resolver.openOutputStream(uri)?.use { out ->
                 sourceApk.inputStream().use { input -> input.copyTo(out) }
             }
             val done = ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }
             resolver.update(uri, done, null, null)
+            return uri
         }
+        return null
     }
 
-    fun launchApkInstallerWithFallback(context: Context, apkFile: File, fallbackUrl: String) {
-        val launched = runCatching {
-            val apkUri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.provider.file",
-                apkFile,
-            )
-            val installIntent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(apkUri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    fun launchApkInstallerWithFallback(
+        context: Context,
+        apkFile: File?,
+        publicDownloadUri: Uri? = _downloadedPublicUriFlow.value,
+        fallbackUrl: String = DEFAULT_APK_DOWNLOAD_URL,
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val canInstall = runCatching { context.packageManager.canRequestPackageInstalls() }.getOrDefault(true)
+            if (!canInstall) {
+                val openedSettings = runCatching {
+                    val settingsIntent = Intent(
+                        android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:${context.packageName}"),
+                    ).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(settingsIntent)
+                    Toast.makeText(
+                        context,
+                        "Allow 'Install unknown apps' for 8002Keys, then tap 'Install Downloaded APK'",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                    true
+                }.getOrDefault(false)
+                if (openedSettings) {
+                    _statusMessageFlow.value =
+                        "Turn ON 'Allow from this source' in Android Settings, then tap 'Install Downloaded APK Now' below."
+                    return
+                }
             }
-            context.startActivity(installIntent)
-            true
-        }.getOrDefault(false)
+        }
 
-        if (!launched) {
+        val launchedFromCache = if (apkFile != null && apkFile.exists()) {
+            runCatching {
+                val apkUri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.provider.file",
+                    apkFile,
+                )
+                val installIntent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(apkUri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(installIntent)
+                true
+            }.getOrDefault(false)
+        } else {
+            false
+        }
+
+        if (launchedFromCache) return
+
+        val launchedFromPublicUri = if (publicDownloadUri != null) {
+            runCatching {
+                val installIntent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(publicDownloadUri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(installIntent)
+                true
+            }.getOrDefault(false)
+        } else {
+            false
+        }
+
+        if (!launchedFromPublicUri) {
             openBrowserDownload(context, fallbackUrl)
         }
     }
@@ -713,10 +776,37 @@ fun AppUpdateHost(autoCheckOnMount: Boolean = true) {
                 }
             },
             confirmButton = {
+                val downloadedFile by AppUpdateManager.downloadedApkFileFlow.collectAsState()
+                val downloadedUri by AppUpdateManager.downloadedPublicUriFlow.collectAsState()
+                val hasDownloadedApk = (downloadedFile?.exists() == true) || (downloadedUri != null)
+
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
+                    if (hasDownloadedApk && downloadProgress == null) {
+                        Button(
+                            onClick = {
+                                AppUpdateManager.launchApkInstallerWithFallback(
+                                    context = context,
+                                    apkFile = downloadedFile,
+                                    publicDownloadUri = downloadedUri,
+                                    fallbackUrl = info.downloadUrl,
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SystemUpdateAlt,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            val installReadyLabel = "✓ Install Downloaded APK Now"
+                            Text(installReadyLabel, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
                     Button(
                         onClick = {
                             scope.launch {
@@ -734,6 +824,8 @@ fun AppUpdateHost(autoCheckOnMount: Boolean = true) {
                         Spacer(modifier = Modifier.width(6.dp))
                         val btnLabel = if (downloadProgress != null) {
                             "Downloading Update (${downloadProgress}%)..."
+                        } else if (hasDownloadedApk) {
+                            "Re-Download Update APK"
                         } else if (info.isUpdateAvailable) {
                             "Update Now (Download & Install)"
                         } else {
