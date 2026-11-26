@@ -15,6 +15,7 @@ Machine-readable trust registry: [`app/src/main/config/trust-capabilities.json`]
 Declared manifest permissions:
 
 - `android.permission.INTERNET` — Opt-in user-authenticated Google Gemini and OpenAI ChatGPT AI grammar, spell-check, and writing assistant (gated by `SensitiveFieldGuard`).
+- `android.permission.RECORD_AUDIO` — User-initiated built-in Gemini/ChatGPT AI voice typing (Roman Urdu, Urdu, English).
 - `android.permission.REQUEST_INSTALL_PACKAGES` — User-initiated 1-tap in-app APK auto-update installation from GitHub Releases.
 - `android.permission.VIBRATE` — Optional keypress haptic/vibration feedback.
 - `android.permission.POST_NOTIFICATIONS` — User-visible local notifications on Android 13+.

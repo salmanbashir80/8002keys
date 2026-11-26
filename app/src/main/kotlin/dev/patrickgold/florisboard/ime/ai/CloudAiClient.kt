@@ -1566,6 +1566,192 @@ object CloudAiClient {
     }
 
     /**
+     * Native in-app AI audio transcription using the user's connected Google Gemini (native
+     * multimodal audio input) or OpenAI ChatGPT (Whisper `audio/transcriptions`).
+     *
+     * Works on 100% of Android phones — even ColorOS / Oppo / Huawei devices that do not ship
+     * Google Speech Services (`RecognizerIntent.ACTION_RECOGNIZE_SPEECH`).
+     */
+    suspend fun transcribeAudioWithAi(
+        context: Context,
+        audioBytes: ByteArray,
+        mimeType: String = "audio/mp4",
+        outputModeLabel: String = "Roman Urdu",
+        speakLanguageHint: String = "Urdu or English",
+    ): AiExecutionResult = withContext(Dispatchers.IO) {
+        if (audioBytes.isEmpty()) {
+            return@withContext AiExecutionResult(
+                outputText = "",
+                providerUsed = "Voice AI",
+                usedCloudAi = false,
+                errorMessage = "Empty audio recording.",
+            )
+        }
+        val vault = AiMemoryVault.state.value
+        val instruction = when {
+            outputModeLabel.contains("Roman", ignoreCase = true) ->
+                "Listen carefully to this voice recording ($speakLanguageHint). Transcribe it directly into clean, natural Pakistani Roman Urdu (Latin script). Fix any stutters or grammar slips. Return ONLY the final Roman Urdu text with no explanations."
+            outputModeLabel.contains("اردو") ->
+                "Listen carefully to this voice recording ($speakLanguageHint). Transcribe and translate it into natural Urdu script (اردو). Return ONLY the Urdu text with no explanations."
+            outputModeLabel.contains("English", ignoreCase = true) ->
+                "Listen carefully to this voice recording ($speakLanguageHint). Transcribe and translate it into natural, grammatically correct English. Return ONLY the English text with no explanations."
+            else ->
+                "Listen carefully to this voice recording ($speakLanguageHint). Transcribe it accurately in the same language spoken (Roman Urdu if Urdu is spoken, English if English is spoken) with clean punctuation. Return ONLY the final text."
+        }
+
+        val errors = mutableListOf<String>()
+
+        // 1. Try Google Gemini Native Audio Transcription (gemini-2.5-flash supports inline audio/mp4)
+        if (vault.isGeminiReady && !vault.geminiApiKey.startsWith("WEB_SESSION:")) {
+            runCatching {
+                val transcribed = callGeminiAudioTranscription(
+                    apiKey = vault.geminiApiKey,
+                    model = vault.geminiModel.ifBlank { "gemini-2.5-flash" },
+                    audioBytes = audioBytes,
+                    mimeType = mimeType,
+                    instruction = instruction,
+                )
+                if (transcribed.isNotBlank()) {
+                    return@withContext AiExecutionResult(
+                        outputText = transcribed,
+                        providerUsed = "Google Gemini Voice (${vault.geminiModel})",
+                        usedCloudAi = true,
+                    )
+                }
+            }.onFailure { err ->
+                errors += "Gemini Voice: ${err.message}"
+            }
+        }
+
+        // 2. Try OpenAI Whisper Transcription (ChatGPT)
+        if (vault.isChatGptReady && !vault.chatGptApiKey.startsWith("WEB_SESSION:")) {
+            runCatching {
+                val rawWhisper = callOpenAiWhisperTranscription(
+                    apiKey = vault.chatGptApiKey,
+                    baseUrl = vault.chatGptBaseUrl,
+                    audioBytes = audioBytes,
+                )
+                if (rawWhisper.isNotBlank()) {
+                    val targetTask = when {
+                        outputModeLabel.contains("Roman", ignoreCase = true) -> AiWritingTask.ENGLISH_TO_ROMAN_URDU
+                        outputModeLabel.contains("اردو") -> AiWritingTask.TO_URDU_SCRIPT
+                        outputModeLabel.contains("English", ignoreCase = true) -> AiWritingTask.ROMAN_URDU_TO_ENGLISH
+                        else -> AiWritingTask.FIX_GRAMMAR_SPELLING
+                    }
+                    val polished = executeTask(
+                        context = context,
+                        task = targetTask,
+                        inputText = rawWhisper,
+                    )
+                    val finalText = polished.outputText.trim().ifBlank { rawWhisper }
+                    return@withContext AiExecutionResult(
+                        outputText = finalText,
+                        providerUsed = "ChatGPT Whisper Voice",
+                        usedCloudAi = true,
+                    )
+                }
+            }.onFailure { err ->
+                errors += "ChatGPT Voice: ${err.message}"
+            }
+        }
+
+        AiExecutionResult(
+            outputText = "",
+            providerUsed = "Voice AI",
+            usedCloudAi = false,
+            errorMessage = errors.joinToString(" | ").ifBlank {
+                "Connect a Gemini or ChatGPT API key in 8002Keys AI Settings, or enable Google Speech / Offline Voice."
+            },
+        )
+    }
+
+    private fun callGeminiAudioTranscription(
+        apiKey: String,
+        model: String,
+        audioBytes: ByteArray,
+        mimeType: String,
+        instruction: String,
+    ): String {
+        val base64Audio = java.util.Base64.getEncoder().encodeToString(audioBytes)
+        val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" +
+            "${URLEncoder.encode(model, "UTF-8")}:generateContent?key=${URLEncoder.encode(apiKey, "UTF-8")}"
+        val payload = buildJsonObject {
+            putJsonArray("contents") {
+                add(
+                    buildJsonObject {
+                        put("role", "user")
+                        putJsonArray("parts") {
+                            add(buildJsonObject { put("text", instruction) })
+                            add(
+                                buildJsonObject {
+                                    putJsonObject("inlineData") {
+                                        put("mimeType", mimeType)
+                                        put("data", base64Audio)
+                                    }
+                                },
+                            )
+                        }
+                    },
+                )
+            }
+            putJsonObject("generationConfig") {
+                put("temperature", 0.1)
+                put("maxOutputTokens", 512)
+            }
+        }
+        val responseBody = postJson(endpoint, payload.toString(), headers = emptyMap())
+        val root = json.parseToJsonElement(responseBody).jsonObject
+        val text = root["candidates"]?.jsonArray?.firstOrNull()?.jsonObject
+            ?.get("content")?.jsonObject
+            ?.get("parts")?.jsonArray?.firstOrNull()?.jsonObject
+            ?.get("text")?.jsonPrimitive?.contentOrNull
+            .orEmpty()
+        return cleanAiOutput(text)
+    }
+
+    private fun callOpenAiWhisperTranscription(
+        apiKey: String,
+        baseUrl: String,
+        audioBytes: ByteArray,
+    ): String {
+        val normalizedBase = baseUrl.trim().trimEnd('/').ifEmpty { "https://api.openai.com/v1" }
+        val endpoint = "$normalizedBase/audio/transcriptions"
+        val boundary = "----8002KeysVoiceBoundary${System.currentTimeMillis()}"
+        val conn = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15_000
+            readTimeout = 30_000
+            doOutput = true
+            setRequestProperty("Authorization", "Bearer $apiKey")
+            setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+        }
+        return try {
+            conn.outputStream.use { out ->
+                fun writeStr(s: String) = out.write(s.toByteArray(StandardCharsets.UTF_8))
+                writeStr("--$boundary\r\n")
+                writeStr("Content-Disposition: form-data; name=\"model\"\r\n\r\n")
+                writeStr("whisper-1\r\n")
+                writeStr("--$boundary\r\n")
+                writeStr("Content-Disposition: form-data; name=\"file\"; filename=\"voice.m4a\"\r\n")
+                writeStr("Content-Type: audio/mp4\r\n\r\n")
+                out.write(audioBytes)
+                writeStr("\r\n--$boundary--\r\n")
+                out.flush()
+            }
+            val status = conn.responseCode
+            val stream = if (status in 200..299) conn.inputStream else conn.errorStream
+            val body = stream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
+            if (status !in 200..299) {
+                throw IllegalStateException(extractApiErrorMessage(body).ifBlank { "HTTP $status" })
+            }
+            val root = json.parseToJsonElement(body).jsonObject
+            cleanAiOutput(root["text"]?.jsonPrimitive?.contentOrNull.orEmpty())
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /**
      * Bridges [CloudAiClient] into [RewriteProviderRegistry] so existing Smartbar rewrite
      * quick actions (Formal, Casual, Shorter, Longer, Summarize) use Gemini / ChatGPT / Local AI.
      */

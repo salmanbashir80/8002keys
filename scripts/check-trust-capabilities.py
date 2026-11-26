@@ -309,6 +309,7 @@ def derive_enrollment_policy(root: Path) -> tuple[list[str], str, list[str], lis
         "com.salmanbashir.keys8002.permission.",
         [
             "android.permission.INTERNET",
+            "android.permission.RECORD_AUDIO",
             "android.permission.REQUEST_INSTALL_PACKAGES",
             "com.salmanbashir.keys8002.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
             "com.salmanbashir.keys8002.bench.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",

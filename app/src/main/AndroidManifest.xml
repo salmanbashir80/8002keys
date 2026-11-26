@@ -24,6 +24,7 @@
     <!-- Permission requested only from the Calendar quick-insert action. Lets
          users insert local agenda event titles + date/time from the smartbar. -->
     <uses-permission android:name="android.permission.READ_CALENDAR"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
     <!-- Android 16+ (API 36). Lets the keyboard read whether the user has
          enabled Advanced Protection Mode so it can hold learning, clipboard

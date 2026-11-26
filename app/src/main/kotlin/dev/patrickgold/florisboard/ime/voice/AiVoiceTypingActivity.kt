@@ -241,6 +241,115 @@ class AiVoiceTypingActivity : ComponentActivity() {
         }
 
         var speechUnavailable by remember { mutableStateOf(false) }
+        var isRecordingMic by remember { mutableStateOf(false) }
+        var recordingSeconds by remember { mutableStateOf(0) }
+        var activeRecorder by remember { mutableStateOf<android.media.MediaRecorder?>(null) }
+        var activeAudioFile by remember { mutableStateOf<java.io.File?>(null) }
+
+        fun stopRecorderQuietly() {
+            runCatching {
+                activeRecorder?.apply {
+                    stop()
+                    release()
+                }
+            }
+            activeRecorder = null
+            isRecordingMic = false
+        }
+
+        androidx.compose.runtime.DisposableEffect(Unit) {
+            onDispose { stopRecorderQuietly() }
+        }
+
+        LaunchedEffect(isRecordingMic) {
+            if (isRecordingMic) {
+                recordingSeconds = 0
+                while (isRecordingMic) {
+                    kotlinx.coroutines.delay(1000)
+                    recordingSeconds += 1
+                }
+            }
+        }
+
+        fun startDirectMicRecording() {
+            stopRecorderQuietly()
+            val outFile = java.io.File(cacheDir, "voice_ai_${System.currentTimeMillis()}.m4a")
+            runCatching {
+                val recorder = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    android.media.MediaRecorder(this@AiVoiceTypingActivity)
+                } else {
+                    @Suppress("DEPRECATION")
+                    android.media.MediaRecorder()
+                }
+                recorder.apply {
+                    setAudioSource(android.media.MediaRecorder.AudioSource.MIC)
+                    setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4)
+                    setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC)
+                    setAudioEncodingBitRate(64_000)
+                    setAudioSamplingRate(16_000)
+                    setOutputFile(outFile.absolutePath)
+                    prepare()
+                    start()
+                }
+                activeRecorder = recorder
+                activeAudioFile = outFile
+                isRecordingMic = true
+                speechUnavailable = false
+                statusLine = "🔴 Listening... Speak in Urdu or English, then tap 'Stop & Write'"
+            }.onFailure { err ->
+                isRecordingMic = false
+                speechUnavailable = true
+                statusLine = "Mic error: ${err.message ?: "Unable to start mic"}. Tap a button below:"
+            }
+        }
+
+        fun stopMicAndTranscribeWithAi() {
+            val file = activeAudioFile
+            stopRecorderQuietly()
+            if (file == null || !file.exists() || file.length() < 500L) {
+                statusLine = "Recording too short — tap 'Speak Now' and speak clearly."
+                return
+            }
+            isProcessingAi = true
+            statusLine = "✨ Gemini / ChatGPT transcribing (${selectedMode.shortLabel})..."
+            scope.launch {
+                val bytes = runCatching { file.readBytes() }.getOrDefault(ByteArray(0))
+                runCatching { file.delete() }
+                val res = CloudAiClient.transcribeAudioWithAi(
+                    context = this@AiVoiceTypingActivity,
+                    audioBytes = bytes,
+                    mimeType = "audio/mp4",
+                    outputModeLabel = selectedMode.shortLabel,
+                    speakLanguageHint = selectedLanguage.label,
+                )
+                isProcessingAi = false
+                val text = res.outputText.trim()
+                if (text.isNotEmpty()) {
+                    AiMemoryVault.recordLearnedCorrection(
+                        context = this@AiVoiceTypingActivity,
+                        originalText = "[Voice]",
+                        preferredText = text,
+                        taskLabel = "Voice ${selectedMode.shortLabel}",
+                        isSensitiveOrIncognito = false,
+                    )
+                    onCommitAndClose(text)
+                } else {
+                    speechUnavailable = true
+                    statusLine = res.errorMessage ?: "Could not transcribe. Check Gemini/ChatGPT key or enable Google Speech."
+                }
+            }
+        }
+
+        val micPermissionLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { granted ->
+            if (granted) {
+                startDirectMicRecording()
+            } else {
+                speechUnavailable = true
+                statusLine = "Microphone permission needed — tap 'Speak Now' and allow Microphone."
+            }
+        }
 
         fun openVoiceSettings() {
             val intents = listOf(
@@ -277,6 +386,15 @@ class AiVoiceTypingActivity : ComponentActivity() {
         }
 
         fun startNativeSpeechRecognizer() {
+            if (isRecordingMic) {
+                stopMicAndTranscribeWithAi()
+                return
+            }
+            val hasCloudKey = (vaultState.isGeminiReady && !vaultState.geminiApiKey.startsWith("WEB_SESSION:")) ||
+                (vaultState.isChatGptReady && !vaultState.chatGptApiKey.startsWith("WEB_SESSION:"))
+
+            // Prefer built-in Gemini/ChatGPT direct mic recording whenever a cloud key is connected
+            // OR when Android's system speech intent is missing on this phone (ColorOS/Oppo/etc.)
             val langTag = selectedLanguage.bcp47.ifBlank { Locale.getDefault().toLanguageTag() }
             val recognizeIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(
@@ -292,12 +410,26 @@ class AiVoiceTypingActivity : ComponentActivity() {
                     "8002Keys Voice AI (${selectedMode.shortLabel}) — Speak Now",
                 )
             }
-            runCatching {
-                speechUnavailable = false
-                speechLauncher.launch(recognizeIntent)
-            }.onFailure {
-                speechUnavailable = true
-                statusLine = "Voice typing needs Google Speech enabled — tap a button below to enable in 1 tap:"
+            val canLaunchSystemSpeech = !hasCloudKey &&
+                recognizeIntent.resolveActivity(packageManager) != null
+
+            if (canLaunchSystemSpeech) {
+                val ok = runCatching {
+                    speechUnavailable = false
+                    speechLauncher.launch(recognizeIntent)
+                }.isSuccess
+                if (ok) return
+            }
+
+            // Use direct in-app mic recording -> Gemini / ChatGPT Voice AI!
+            val hasMicPerm = androidx.core.content.ContextCompat.checkSelfPermission(
+                this@AiVoiceTypingActivity,
+                android.Manifest.permission.RECORD_AUDIO,
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (hasMicPerm) {
+                startDirectMicRecording()
+            } else {
+                micPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
             }
         }
 
@@ -563,7 +695,9 @@ class AiVoiceTypingActivity : ComponentActivity() {
                                 .defaultMinSize(minHeight = 48.dp),
                             contentPadding = compactBtnPadding,
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = activeGreen),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isRecordingMic) Color(0xFFDC2626) else activeGreen,
+                            ),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Mic,
@@ -571,7 +705,11 @@ class AiVoiceTypingActivity : ComponentActivity() {
                                 modifier = Modifier.size(18.dp),
                             )
                             Spacer(Modifier.width(6.dp))
-                            val speakNowLabel = "Speak Now"
+                            val speakNowLabel = if (isRecordingMic) {
+                                "⏹ Stop & Write (${recordingSeconds}s)"
+                            } else {
+                                "Speak Now"
+                            }
                             Text(
                                 text = speakNowLabel,
                                 fontSize = 14.sp,

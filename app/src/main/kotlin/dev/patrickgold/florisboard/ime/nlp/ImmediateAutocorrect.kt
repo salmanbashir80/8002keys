@@ -484,6 +484,63 @@ internal object ImmediateAutocorrect {
     }
 
     /**
+     * Returns true if [rawWord] is a known Pakistani Roman Urdu word or exists in the user's
+     * personal [AiMemoryVault] dictionary (learned from selections, voice, or SwiftKey/Gboard import).
+     * Used by [NlpManager] so the English dictionary NEVER hijacks or overwrites Roman Urdu words.
+     */
+    fun isKnownRomanUrduOrVaultWord(rawWord: String): Boolean {
+        val clean = rawWord.trim().trim { ch -> !ch.isLetter() }.lowercase()
+        if (clean.length < 2) return false
+        if (clean in RomanUrduCoreVocabSet) return true
+        val personal = runCatching {
+            dev.patrickgold.florisboard.ime.ai.AiMemoryVault.state.value.customWords
+        }.getOrDefault(emptyList())
+        return personal.any { it.equals(clean, ignoreCase = true) }
+    }
+
+    /**
+     * Predicts matching Roman Urdu and user-learned [AiMemoryVault] words for the active typing
+     * prefix so the suggestion bar actively suggests Roman Urdu & personal memory words.
+     */
+    fun predictRomanUrduAndPersonalCandidates(
+        rawPrefix: String,
+        maxCount: Int = 3,
+    ): List<WordSuggestionCandidate> {
+        val prefix = rawPrefix.trim().trim { ch -> !ch.isLetter() }.lowercase()
+        if (prefix.length < 2) return emptyList()
+
+        val personal = runCatching {
+            dev.patrickgold.florisboard.ime.ai.AiMemoryVault.state.value.customWords
+        }.getOrDefault(emptyList())
+
+        val matches = LinkedHashSet<String>()
+        // 1. User's own selected/learned words first (highest priority!)
+        for (w in personal) {
+            if (w.length >= prefix.length && w.startsWith(prefix, ignoreCase = true) && !w.equals(prefix, ignoreCase = true)) {
+                matches.add(w)
+                if (matches.size >= maxCount) break
+            }
+        }
+        // 2. Built-in Roman Urdu core vocabulary next
+        if (matches.size < maxCount) {
+            for (w in RomanUrduCoreVocab) {
+                if (w.length >= prefix.length && w.startsWith(prefix, ignoreCase = true) && !w.equals(prefix, ignoreCase = true)) {
+                    matches.add(applyTypedCase(w, rawPrefix))
+                    if (matches.size >= maxCount) break
+                }
+            }
+        }
+        return matches.map { word ->
+            WordSuggestionCandidate(
+                text = word,
+                confidence = 0.92,
+                isEligibleForAutoCommit = false,
+                isEligibleForUserRemoval = false,
+            )
+        }
+    }
+
+    /**
      * Real-time QWERTY-aware fuzzy matcher for Roman Urdu + user's Personal Dictionary words
      * (imported from SwiftKey/Gboard or learned via AI Memory Vault).
      *

@@ -265,7 +265,7 @@ Out of scope:
 ## 5. Verification checklist (run on every release)
 
 - [ ] `aapt dump permissions app-release.apk` matches
-  `android.permission.INTERNET`, `android.permission.REQUEST_INSTALL_PACKAGES`, `android.permission.VIBRATE`, `android.permission.POST_NOTIFICATIONS`,
+  `android.permission.INTERNET`, `android.permission.RECORD_AUDIO`, `android.permission.REQUEST_INSTALL_PACKAGES`, `android.permission.VIBRATE`, `android.permission.POST_NOTIFICATIONS`,
   `android.permission.READ_CALENDAR`,
   `android.permission.QUERY_ADVANCED_PROTECTION_MODE`, and
   `com.salmanbashir.keys8002.permission.BIND_MCP` (and any new entry

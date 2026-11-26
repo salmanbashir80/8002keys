@@ -365,10 +365,25 @@ class NlpManager(
             }
             val currentWord = content.autoCommitWord()
             val currentWordStart = content.autoCommitWordStart()
-            val typedWordKnown = suggestionsEnabled && isKnownTypedWord(
-                suggestionProvider = suggestionProvider,
-                subtype = subtype,
-                currentWord = currentWord,
+            val isKnownRomanUrduOrPersonal = suggestionsEnabled &&
+                ImmediateAutocorrect.isKnownRomanUrduOrVaultWord(currentWord)
+            val romanUrduPredictions = if (suggestionsEnabled) {
+                ImmediateAutocorrect.predictRomanUrduAndPersonalCandidates(currentWord)
+            } else {
+                emptyList()
+            }
+            val mergedPreferredSuggestions = if (romanUrduPredictions.isEmpty()) {
+                userDictionarySuggestions
+            } else {
+                (userDictionarySuggestions + romanUrduPredictions)
+                    .distinctBy { it.text.toString().lowercase() }
+            }
+            val typedWordKnown = suggestionsEnabled && (
+                isKnownRomanUrduOrPersonal || isKnownTypedWord(
+                    suggestionProvider = suggestionProvider,
+                    subtype = subtype,
+                    currentWord = currentWord,
+                )
             )
             val candidateSignals = candidateSignals(
                 subtype = subtype,
@@ -376,12 +391,13 @@ class NlpManager(
                 suggestionProvider = suggestionProvider,
                 currentWord = currentWord,
                 currentWordStart = currentWordStart,
-                candidates = userDictionarySuggestions + suggestions,
+                candidates = mergedPreferredSuggestions + suggestions,
             )
             // A rare dictionary word one key off a far more common one ("thos") is decoded as unknown so
             // space can correct it, and learning treats it as unknown too: a known word is learned on its
             // first use, and a learned word is never corrected again, so one uncorrected slip would stick.
             val typedWordLooksLikeSlip = typedWordKnown &&
+                !isKnownRomanUrduOrPersonal &&
                 suggestionProvider.isLikelySlip(subtype, content, currentWord) &&
                 activeLocales(subtype).none { locale ->
                     currentWord.normalizedCandidateSignalKey()
@@ -396,7 +412,7 @@ class NlpManager(
             )
             val wordSuggestions = SwiftKeyCandidateRanker.rank(
                 context = decoderContext,
-                preferred = userDictionarySuggestions,
+                preferred = mergedPreferredSuggestions,
                 fallback = suggestions,
             )
             if (typingTraceRecorder.isEnabled()) {
