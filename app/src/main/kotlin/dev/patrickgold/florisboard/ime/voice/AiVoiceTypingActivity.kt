@@ -237,6 +237,34 @@ class AiVoiceTypingActivity : ComponentActivity() {
             }
         }
 
+        var speechUnavailable by remember { mutableStateOf(false) }
+
+        fun openVoiceSettings() {
+            val intents = listOf(
+                Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS),
+                Intent(android.provider.Settings.ACTION_INPUT_METHOD_SETTINGS),
+                Intent(android.provider.Settings.ACTION_SETTINGS),
+            )
+            for (intent in intents) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (runCatching { startActivity(intent) }.isSuccess) return
+            }
+        }
+
+        fun openGoogleSpeechInstaller() {
+            val market = Intent(
+                Intent.ACTION_VIEW,
+                android.net.Uri.parse("market://details?id=com.google.android.tts"),
+            ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+            val web = Intent(
+                Intent.ACTION_VIEW,
+                android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.tts"),
+            ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+            if (runCatching { startActivity(market) }.isFailure) {
+                runCatching { startActivity(web) }
+            }
+        }
+
         fun startNativeSpeechRecognizer() {
             val langTag = selectedLanguage.bcp47.ifBlank { Locale.getDefault().toLanguageTag() }
             val recognizeIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -254,14 +282,11 @@ class AiVoiceTypingActivity : ComponentActivity() {
                 )
             }
             runCatching {
+                speechUnavailable = false
                 speechLauncher.launch(recognizeIntent)
             }.onFailure {
-                statusLine = "System speech recognizer not found on this device."
-                Toast.makeText(
-                    this@AiVoiceTypingActivity,
-                    "Please enable Google Voice Typing in Android Settings.",
-                    Toast.LENGTH_LONG,
-                ).show()
+                speechUnavailable = true
+                statusLine = "Voice typing needs Google Speech enabled — tap a button below to enable in 1 tap:"
             }
         }
 
@@ -445,6 +470,46 @@ class AiVoiceTypingActivity : ComponentActivity() {
                         )
                     }
 
+                    if (speechUnavailable) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Button(
+                                onClick = { openVoiceSettings() },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = activeBlue),
+                            ) {
+                                val openSettingsLbl = "⚙️ Open Voice Settings"
+                                Text(
+                                    text = openSettingsLbl,
+                                    color = textWhite,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                            Button(
+                                onClick = { openGoogleSpeechInstaller() },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
+                            ) {
+                                val installSpeechLbl = "📥 Enable Google Speech"
+                                Text(
+                                    text = installSpeechLbl,
+                                    color = textWhite,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                        }
+                    }
+
                     // Primary Speak Now Button
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -455,7 +520,7 @@ class AiVoiceTypingActivity : ComponentActivity() {
                             enabled = !isProcessingAi,
                             modifier = Modifier
                                 .weight(1f)
-                                .height(52.dp),
+                                .height(50.dp),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = activeGreen),
                         ) {
@@ -468,15 +533,25 @@ class AiVoiceTypingActivity : ComponentActivity() {
                             val speakNowLabel = "🎤 Speak Now"
                             Text(
                                 text = speakNowLabel,
-                                fontSize = 16.sp,
+                                fontSize = 15.sp,
                                 fontWeight = FontWeight.ExtraBold,
                             )
                         }
 
                         OutlinedButton(
+                            onClick = { openVoiceSettings() },
+                            enabled = !isProcessingAi,
+                            modifier = Modifier.height(50.dp),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            val settingsShort = "⚙️"
+                            Text(settingsShort, color = textWhite, fontSize = 16.sp)
+                        }
+
+                        OutlinedButton(
                             onClick = onClose,
                             enabled = !isProcessingAi,
-                            modifier = Modifier.height(52.dp),
+                            modifier = Modifier.height(50.dp),
                             shape = RoundedCornerShape(12.dp),
                         ) {
                             val cancelLabel = "Close"

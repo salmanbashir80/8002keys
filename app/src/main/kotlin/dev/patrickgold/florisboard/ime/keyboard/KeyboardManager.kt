@@ -591,7 +591,11 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
             // The user explicitly chose this candidate (or auto-commit chose it on their
             // behalf). Reinforce its weight in the personal dictionary so it ranks higher
             // next time. Skipped in incognito.
-            learnIfAllowed(candidate.text.toString())
+            val chosenText = candidate.text.toString()
+            learnIfAllowed(chosenText)
+            if (!activeState.isIncognitoMode && chosenText.isNotBlank()) {
+                dev.patrickgold.florisboard.ime.ai.AiMemoryVault.learnWordsFromText(appContext, chosenText)
+            }
         }
         return committed
     }

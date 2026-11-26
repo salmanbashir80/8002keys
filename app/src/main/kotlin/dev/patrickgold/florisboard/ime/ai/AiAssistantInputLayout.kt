@@ -104,8 +104,13 @@ data class LastAiFixSnapshot(
 }
 
 object LastAiFixSession {
+    private const val MAX_UNDO_STEPS = 25
+
     private val _latestFix = MutableStateFlow<LastAiFixSnapshot?>(null)
     val latestFix: StateFlow<LastAiFixSnapshot?> = _latestFix.asStateFlow()
+
+    private val _undoStack = MutableStateFlow<List<LastAiFixSnapshot>>(emptyList())
+    val undoStack: StateFlow<List<LastAiFixSnapshot>> = _undoStack.asStateFlow()
 
     fun record(
         originalText: String,
@@ -122,11 +127,23 @@ object LastAiFixSession {
             changedWordCount = diff.changedWordCount,
         )
         _latestFix.value = snapshot
+        _undoStack.value = (_undoStack.value + snapshot).takeLast(MAX_UNDO_STEPS)
         return snapshot
+    }
+
+    fun popUndo(): LastAiFixSnapshot? {
+        val current = _undoStack.value
+        if (current.isEmpty()) return null
+        val popped = current.last()
+        val remaining = current.dropLast(1)
+        _undoStack.value = remaining
+        _latestFix.value = remaining.lastOrNull()
+        return popped
     }
 
     fun clear() {
         _latestFix.value = null
+        _undoStack.value = emptyList()
     }
 }
 
@@ -407,9 +424,10 @@ fun AiAssistantInputLayout(
             }
         }
 
-        // 2. TOP SECTION: Smart Message Reader + 1-Tap Auto-Suggested Message + Light-Green Diff
+        // 2. TOP SECTION: Smart Message Reader + Real Gemini/ChatGPT Auto-Judgment + 1-Tap Paste + Light-Green Diff
+        val undoStack by LastAiFixSession.undoStack.collectAsState()
         val readableSource = sourceEditorText.trim().ifBlank { clipboardText }
-        val autoSmartSuggestion = remember(readableSource) {
+        val localQuickSuggestion = remember(readableSource) {
             if (readableSource.length < 3) {
                 null
             } else {
@@ -417,7 +435,6 @@ fun AiAssistantInputLayout(
                 if (fixed.isNotBlank() && fixed != readableSource) {
                     fixed
                 } else if (sourceEditorText.isBlank() && clipboardText.isNotBlank()) {
-                    // Clipboard has an incoming message -> offer instant smart reply
                     LocalGrammarAndRewriteEngine.executeLocalFallback(
                         task = AiWritingTask.WHATSAPP_REPLY,
                         inputText = clipboardText,
@@ -427,6 +444,38 @@ fun AiAssistantInputLayout(
                 }
             }
         }
+
+        // Automatically ask Gemini / ChatGPT to understand messy Roman Urdu / English intent
+        var cloudAutoSuggestion by remember { mutableStateOf<Pair<String, String>?>(null) }
+        var isAutoJudging by remember { mutableStateOf(false) }
+
+        LaunchedEffect(readableSource) {
+            cloudAutoSuggestion = null
+            if (readableSource.length < 4 || isRunning) return@LaunchedEffect
+            val info = editorInstance.activeInfo
+            if (dev.patrickgold.florisboard.ime.smartcompose.SensitiveFieldGuard.isSensitive(info.base.inputType, info.base.imeOptions)) {
+                return@LaunchedEffect
+            }
+            delay(550)
+            isAutoJudging = true
+            val res = CloudAiClient.executeTask(
+                context = context,
+                task = AiWritingTask.FIX_GRAMMAR_SPELLING,
+                inputText = readableSource,
+                inputType = info.base.inputType,
+                imeOptions = info.base.imeOptions,
+                isIncognito = keyboardManager.activeState.isIncognitoMode,
+            )
+            isAutoJudging = false
+            val out = res.outputText.trim()
+            if (out.isNotBlank() && !out.equals(readableSource, ignoreCase = false)) {
+                cloudAutoSuggestion = out to res.providerUsed
+            }
+        }
+
+        val autoSmartSuggestion = cloudAutoSuggestion?.first ?: localQuickSuggestion
+        val autoSuggestionProvider = cloudAutoSuggestion?.second
+            ?: if (vaultState.isGeminiReady) "Google Gemini" else "8002Keys Smart AI"
 
         Box(
             modifier = Modifier
@@ -464,12 +513,32 @@ fun AiAssistantInputLayout(
                     val activeProvider = lastResult?.providerUsed
                         ?: activeSnapshot?.providerUsed
 
-                    // Auto-generated 1-Tap Paste Smart Suggestion Card (reads editor or clipboard)
+                    if (isAutoJudging && autoSmartSuggestion.isNullOrBlank()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                                color = accentGreen,
+                            )
+                            val judgingText = "AI reading your Roman Urdu / English message..."
+                            Text(
+                                text = judgingText,
+                                color = Color(0xFF86EFAC),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+
+                    // Auto-generated 1-Tap Paste Smart Suggestion Card (powered by Gemini/ChatGPT)
                     if (!autoSmartSuggestion.isNullOrBlank()) {
                         val suggestionTitle = if (sourceEditorText.isBlank() && clipboardText.isNotBlank()) {
-                            "✨ Smart Reply Ready — Tap to Paste"
+                            "✨ Smart Reply ($autoSuggestionProvider) — Tap to Paste"
                         } else {
-                            "✨ Smart Fix Ready — Tap to Paste"
+                            "✨ $autoSuggestionProvider Understands — Tap to Paste"
                         }
                         val autoDiff = remember(readableSource, autoSmartSuggestion) {
                             AiDiffHighlighter.buildHighlightedDiff(readableSource, autoSmartSuggestion)
@@ -491,13 +560,17 @@ fun AiAssistantInputLayout(
                                         newText = autoSmartSuggestion,
                                         taskLabel = "Smart Paste",
                                     )
+                                    if (!keyboardManager.activeState.isIncognitoMode) {
+                                        AiMemoryVault.learnWordsFromText(context, autoSmartSuggestion)
+                                    }
                                     LastAiFixSession.record(
                                         originalText = readableSource,
                                         fixedText = autoSmartSuggestion,
-                                        providerUsed = if (vaultState.isGeminiReady) "Google Gemini" else "8002Keys Smart AI",
+                                        providerUsed = autoSuggestionProvider,
                                         taskLabel = "Smart Paste",
                                     )
-                                    statusMessage = "✓ Pasted smart message"
+                                    cloudAutoSuggestion = null
+                                    statusMessage = "✓ Pasted & saved to dictionary ($autoSuggestionProvider)"
                                 }
                                 .padding(horizontal = 10.dp, vertical = 8.dp),
                         ) {
@@ -507,6 +580,8 @@ fun AiAssistantInputLayout(
                                     color = Color(0xFF86EFAC),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.ExtraBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
                                     text = if (sourceEditorText.isNotBlank()) autoDiff.annotatedText else androidx.compose.ui.text.AnnotatedString(autoSmartSuggestion),
@@ -699,7 +774,7 @@ fun AiAssistantInputLayout(
             }
         }
 
-        // 4. Secondary Compact Row: Smart Reply, Professional, Undo
+        // 4. Secondary Compact Row: Smart Reply, Professional, Multi-Step Undo (Memory Stack)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -746,8 +821,7 @@ fun AiAssistantInputLayout(
                 )
             }
 
-            val undoTarget = originalTextBeforeApply ?: sharedLastFix?.originalText
-            if (!undoTarget.isNullOrBlank()) {
+            if (undoStack.isNotEmpty()) {
                 Box(
                     modifier = Modifier
                         .defaultMinSize(minHeight = 38.dp)
@@ -755,22 +829,25 @@ fun AiAssistantInputLayout(
                         .background(accentAmber.copy(alpha = 0.25f))
                         .border(1.dp, accentAmber, RoundedCornerShape(10.dp))
                         .clickable {
-                            replaceTextSmartInEditor(
-                                context = context,
-                                editorInstance = editorInstance,
-                                isIncognito = keyboardManager.activeState.isIncognitoMode,
-                                targetToReplace = sourceEditorText,
-                                newText = undoTarget,
-                                taskLabel = "Undo",
-                            )
-                            originalTextBeforeApply = null
-                            LastAiFixSession.clear()
-                            statusMessage = "↩ Reverted to original text"
+                            val step = LastAiFixSession.popUndo()
+                            if (step != null) {
+                                replaceTextSmartInEditor(
+                                    context = context,
+                                    editorInstance = editorInstance,
+                                    isIncognito = keyboardManager.activeState.isIncognitoMode,
+                                    targetToReplace = sourceEditorText,
+                                    newText = step.originalText,
+                                    taskLabel = "Undo",
+                                )
+                                originalTextBeforeApply = LastAiFixSession.undoStack.value.lastOrNull()?.originalText
+                                lastResult = null
+                                statusMessage = "↩ Reverted 1 step (${LastAiFixSession.undoStack.value.size} left in memory)"
+                            }
                         }
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    val undoLabel = "↩ Undo"
+                    val undoLabel = "↩ Undo (${undoStack.size})"
                     Text(undoLabel, color = accentAmber, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
@@ -1069,6 +1146,40 @@ fun LiveAiSmartStrip(
         }
 
         // ---- DYNAMIC CONTEXTUAL BADGES AT THE END (never shift the core buttons above!) ----
+
+        // 9b. Compact Multi-Step Undo Button (steps backward through memory stack)
+        val stripUndoStack by LastAiFixSession.undoStack.collectAsState()
+        if (stripUndoStack.isNotEmpty()) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(accentAmber.copy(alpha = 0.25f))
+                    .border(1.dp, accentAmber, RoundedCornerShape(8.dp))
+                    .clickable {
+                        val step = LastAiFixSession.popUndo()
+                        if (step != null) {
+                            replaceTextSmartInEditor(
+                                context = context,
+                                editorInstance = editorInstance,
+                                isIncognito = keyboardManager.activeState.isIncognitoMode,
+                                targetToReplace = fullEditorText,
+                                newText = step.originalText,
+                                taskLabel = "Undo",
+                            )
+                        }
+                    }
+                    .padding(horizontal = 8.dp, vertical = 5.dp),
+            ) {
+                val stripUndoLabel = "↩ ${stripUndoStack.size}"
+                Text(
+                    text = stripUndoLabel,
+                    color = accentAmber,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                )
+            }
+        }
 
         // 10. Compact Light-Green Diff Pill (tap to view highlighted changes + Undo)
         val latestFix = sharedLastFix

@@ -58,9 +58,13 @@ enum class AiWritingTask(
 ) {
     FIX_GRAMMAR_SPELLING(
         chipLabel = "Fix Grammar & Spell ✨",
-        systemDirective = "Fix all grammar, spelling, punctuation, and capitalization errors in the user's text. " +
-            "If the text is in English, return corrected natural English. If the text is in Roman Urdu, " +
-            "clean up typos into natural readable Roman Urdu. Return ONLY the corrected text with no explanations.",
+        systemDirective = "You are an expert bilingual English and Pakistani Roman Urdu keyboard AI. " +
+            "Carefully understand what the user intended to write even when words have heavy mobile typing slips " +
+            "(adjacent QWERTY key mistakes, missing/swapped letters, or numbers typed instead of letters like 'tyo8ng' -> 'typing', " +
+            "'toman ursu' -> 'Roman Urdu', 'lioh raha hon' -> 'likh raha hoon', 'cotrection' -> 'correction'). " +
+            "Preserve the user's chosen language (keep Roman Urdu in clean natural Roman Urdu, keep English in clean natural English, " +
+            "keep mixed Urdu+English natural). Fix all spelling, grammar, and punctuation cleanly. " +
+            "Return ONLY the corrected message with no explanations or quotes.",
     ),
     IMPROVE_WRITING(
         chipLabel = "Polish & Improve",
