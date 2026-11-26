@@ -391,11 +391,26 @@ fun AiAssistantInputLayout(
             }
         }
 
-        // 3. Secondary Quick Row: Smart Reply, Professional Polish, Undo
+        // 3. Secondary Quick Row: Voice AI, Smart Reply, Professional Polish, Undo
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(38.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFFDC2626))
+                    .clickable {
+                        FlorisImeService.switchToVoiceInputMethod(showFailureToast = true)
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                val voiceLabel = "🎤 Voice AI"
+                Text(voiceLabel, color = textWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -685,6 +700,25 @@ fun LiveAiSmartStrip(
             val menuLabel = "⊞ Menu"
             Text(
                 text = menuLabel,
+                color = textWhite,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+
+        // 1b. Built-in Gemini & ChatGPT AI Voice Typing Button
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFFDC2626))
+                .clickable {
+                    FlorisImeService.switchToVoiceInputMethod(showFailureToast = true)
+                }
+                .padding(horizontal = 11.dp, vertical = 6.dp),
+        ) {
+            val voiceAiLabel = "🎤 Voice AI"
+            Text(
+                text = voiceAiLabel,
                 color = textWhite,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,

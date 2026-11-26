@@ -60,6 +60,9 @@
     <queries>
         <package android:name="org.futo.voiceinput"/>
         <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH"/>
+        </intent>
+        <intent>
             <action android:name="android.view.InputMethod"/>
         </intent>
         <intent>
@@ -229,6 +232,13 @@
         <!-- Voice Input Setup Activity -->
         <activity
             android:name="dev.patrickgold.florisboard.ime.voice.VoiceInputSetupActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:theme="@style/FlorisAppTheme.Transparent"/>
+
+        <!-- Built-in Gemini & ChatGPT AI Voice Typing Activity -->
+        <activity
+            android:name="dev.patrickgold.florisboard.ime.voice.AiVoiceTypingActivity"
             android:excludeFromRecents="true"
             android:exported="false"
             android:theme="@style/FlorisAppTheme.Transparent"/>

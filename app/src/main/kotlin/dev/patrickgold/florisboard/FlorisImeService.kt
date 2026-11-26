@@ -171,6 +171,11 @@ class FlorisImeService : LifecycleInputMethodService() {
             return ims.switchToVoiceInputMethod(showFailureToast)
         }
 
+        fun flushPendingVoiceAiCommit() {
+            val ims = FlorisImeServiceReference.get() ?: return
+            ims.flushPendingVoiceAiCommitInternal()
+        }
+
         fun showImePicker(): Boolean {
             val ims = FlorisImeServiceReference.get() ?: return false
             return InputMethodUtils.showImePicker(ims)
@@ -288,6 +293,10 @@ class FlorisImeService : LifecycleInputMethodService() {
                 postShortToast(R.string.voice_input__suppressed_on_sensitive_field)
             }
             return false
+        }
+        // Built-in 8002Keys Gemini & ChatGPT AI Voice Typing (zero external keyboard install required)
+        if (dev.patrickgold.florisboard.ime.voice.AiVoiceTypingActivity.launch(this, autoStartListening = true)) {
+            return true
         }
         val imm = systemServiceOrNull(InputMethodManager::class) ?: return false
         val candidates = mutableListOf<Pair<InputMethodInfo, InputMethodSubtype>>()
@@ -742,6 +751,18 @@ class FlorisImeService : LifecycleInputMethodService() {
         // subscribed to `LocalPerAppAccent` can retint. Cheap; no-op when
         // the user toggle is off.
         perAppAccentController.setActiveEditorPackage(editorInfo.packageName)
+        flushPendingVoiceAiCommitInternal()
+    }
+
+    internal fun flushPendingVoiceAiCommitInternal() {
+        val ic = currentInputConnection ?: return
+        val pendingText = dev.patrickgold.florisboard.ime.voice.VoiceAiCommitBridge.consume() ?: return
+        if (pendingText.isNotBlank()) {
+            val committed = runCatching { editorInstance.commitText(pendingText) }.getOrDefault(false)
+            if (!committed) {
+                runCatching { ic.commitText(pendingText, 1) }
+            }
+        }
     }
 
     private fun reapplyFlagSecureForCurrentField() {
@@ -872,8 +893,10 @@ class FlorisImeService : LifecycleInputMethodService() {
         if (windowController.onWindowShown()) {
             flogInfo(LogTopic.IMS_EVENTS)
             inputFeedbackController.updateSystemPrefsState()
+            flushPendingVoiceAiCommitInternal()
         } else {
             flogWarning(LogTopic.IMS_EVENTS) { "Ignoring (is already shown)" }
+            flushPendingVoiceAiCommitInternal()
         }
     }
 
