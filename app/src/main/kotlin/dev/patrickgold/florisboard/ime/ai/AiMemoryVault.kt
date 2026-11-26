@@ -216,7 +216,52 @@ object AiMemoryVault {
             if (resolved.autoPersistAcrossReinstalls && resolved.hasAnyCloudProvider) {
                 writeExternalDeviceVault(appContext, resolved)
             }
-            hydrateCustomWordsIntoDictionary(resolved.customWords)
+            hydrateCustomWordsIntoDictionary(
+                (BUILTIN_TRILINGUAL_STARTER_WORDS + resolved.customWords).distinct(),
+            )
+        }
+    }
+
+    /**
+     * Built-in Roman Urdu + English + Urdu Script (`اردو`) starter vocabulary baked into the APK
+     * so every fresh install immediately knows common words across all three scripts while the
+     * user's personal Google Account vault layers their own learned words on top.
+     */
+    private val BUILTIN_TRILINGUAL_STARTER_WORDS: List<String> = listOf(
+        // Roman Urdu high-frequency vocabulary
+        "Assalamu", "Alaikum", "InshaAllah", "MashaAllah", "Alhamdulillah", "JazakAllah",
+        "Shukriya", "Meherbani", "Behtareen", "Chahiye", "Zaroor", "Bilkul", "Theek", "Accha",
+        "Bohat", "Jaldi", "Samajh", "Masla", "Mujhe", "Aapko", "Aapka", "Aapki", "Tumhein",
+        "Karna", "Karni", "Karne", "Karein", "Karoon", "Karwao", "Batao", "Batana", "Dikhao",
+        "Likhna", "Bolna", "Milna", "Aana", "Jana", "Subah", "Shaam", "Waqt", "Zindagi",
+        "Dost", "Bhai", "Yaar", "Ghar", "Kaam", "Baat", "Pehle", "Baad", "Saath", "Liye",
+        "Upar", "Neeche", "Yahan", "Wahan", "Kahan", "Kaise", "Kyun", "Lekin", "Magar",
+        "Agar", "Phir", "Abhi", "Sirf", "Dobara", "Taake", "Jaise", "Aise", "Isko", "Usko",
+        // English high-frequency tech & chat vocabulary
+        "Gemini", "ChatGPT", "WhatsApp", "Android", "Keyboard", "Dictionary", "Grammar",
+        "Translate", "Assistant", "Memory", "Account", "Subscription", "Update", "Compact",
+        // Urdu Script (اردو) high-frequency vocabulary
+        "السلام", "علیکم", "انشاءاللہ", "ماشاءاللہ", "الحمدللہ", "شکریہ", "مہربانی",
+        "بہترین", "چاہیے", "ضرور", "بالکل", "ٹھیک", "اچھا", "بہت", "جلدی", "سمجھ",
+        "مسئلہ", "مجھے", "آپ", "کرنا", "بتائیں", "لکھنا", "بولنا", "ملنا", "وقت", "صبح",
+        "شام", "دوست", "بھائی", "گھر", "کام", "بات", "پہلے", "بعد", "ساتھ", "لیے",
+    )
+
+    fun learnWordsFromText(context: Context, text: String) {
+        val tokens = text.split(Regex("""[\s,.;:!?()\[\]"']+"""))
+            .map { it.trim() }
+            .filter { it.length in 3..28 && it.any { ch -> ch.isLetter() } }
+            .distinct()
+            .take(20)
+        if (tokens.isEmpty()) return
+        updateState(context) { current ->
+            val merged = (tokens + current.customWords)
+                .distinctBy { it.lowercase() }
+                .take(MAX_CUSTOM_WORDS)
+            current.copy(customWords = merged)
+        }
+        scope.launch {
+            hydrateCustomWordsIntoDictionary(tokens)
         }
     }
 
@@ -242,13 +287,31 @@ object AiMemoryVault {
         model: String = _state.value.geminiModel,
     ) {
         val cleanKey = apiKey.trim()
+        val cleanEmail = accountEmail.trim()
         updateState(context) { current ->
             current.copy(
                 geminiConnected = cleanKey.isNotEmpty(),
-                geminiAccountEmail = accountEmail.trim().ifEmpty { "Google Gemini Account" },
+                geminiAccountEmail = cleanEmail.ifEmpty { current.geminiAccountEmail },
                 geminiApiKey = cleanKey,
                 geminiModel = model.trim().ifEmpty { "gemini-2.5-flash" },
             )
+        }
+        // Auto-merge any previously saved dictionary & memories on this device for this Google Account
+        scope.launch {
+            val external = readExternalDeviceVault(context.applicationContext)
+            if (external != null && (external.customWords.isNotEmpty() || external.learnedMemories.isNotEmpty())) {
+                updateState(context) { current ->
+                    mergeVaultStates(current, external).copy(
+                        geminiConnected = cleanKey.isNotEmpty(),
+                        geminiAccountEmail = cleanEmail.ifEmpty { current.geminiAccountEmail },
+                        geminiApiKey = cleanKey,
+                        lastRestoredFromDeviceMs = System.currentTimeMillis(),
+                    )
+                }
+                hydrateCustomWordsIntoDictionary(
+                    (BUILTIN_TRILINGUAL_STARTER_WORDS + _state.value.customWords).distinct(),
+                )
+            }
         }
     }
 

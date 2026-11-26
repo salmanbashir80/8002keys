@@ -82,10 +82,10 @@ enum class VoiceAiOutputMode(
     val shortLabel: String,
     val aiTask: AiWritingTask?,
 ) {
+    TO_ROMAN_URDU("🇵🇰 Roman Urdu", AiWritingTask.ENGLISH_TO_ROMAN_URDU),
     AUTO_FIX("✨ AI Auto-Fix", AiWritingTask.FIX_GRAMMAR_SPELLING),
-    TO_ENGLISH("🇬🇧 → English", AiWritingTask.ROMAN_URDU_TO_ENGLISH),
-    TO_URDU("🇵🇰 → اردو", AiWritingTask.TO_URDU_SCRIPT),
-    TO_ROMAN_URDU("🇵🇰 → Roman Urdu", AiWritingTask.ENGLISH_TO_ROMAN_URDU),
+    TO_ENGLISH("🇬🇧 English", AiWritingTask.ROMAN_URDU_TO_ENGLISH),
+    TO_URDU("🇵🇰 اردو", AiWritingTask.TO_URDU_SCRIPT),
     RAW("🎤 Direct", null),
 }
 
@@ -113,10 +113,10 @@ object VoiceAiCommitBridge {
     private val pending = AtomicReference<PendingCommit?>(null)
 
     @Volatile
-    var lastSelectedMode: VoiceAiOutputMode = VoiceAiOutputMode.AUTO_FIX
+    var lastSelectedMode: VoiceAiOutputMode = VoiceAiOutputMode.TO_ROMAN_URDU
 
     @Volatile
-    var lastSelectedLanguage: VoiceAiSpeakLanguage = VoiceAiSpeakLanguage.AUTO
+    var lastSelectedLanguage: VoiceAiSpeakLanguage = VoiceAiSpeakLanguage.URDU_PK
 
     fun enqueue(text: String) {
         val clean = text.trim()
@@ -137,8 +137,8 @@ object VoiceAiCommitBridge {
  * Built-in Gemini & ChatGPT AI Voice Typing Activity.
  *
  * Launches Android's native neural speech recognizer (zero external voice keyboard install needed),
- * polishes or translates the spoken text with the user's connected Google Gemini / ChatGPT AI
- * engine, and inserts it straight into the active message box.
+ * polishes or converts spoken Urdu/English into Roman Urdu, Urdu script, or English using
+ * Google Gemini / ChatGPT, and saves learned phrases into [AiMemoryVault].
  */
 class AiVoiceTypingActivity : ComponentActivity() {
     companion object {
@@ -171,6 +171,7 @@ class AiVoiceTypingActivity : ComponentActivity() {
             AiVoiceTypingOverlay(
                 autoStart = autoStart,
                 onCommitAndClose = { finalText ->
+                    AiMemoryVault.learnWordsFromText(this@AiVoiceTypingActivity, finalText)
                     VoiceAiCommitBridge.enqueue(finalText)
                     FlorisImeService.flushPendingVoiceAiCommit()
                     finish()
@@ -193,7 +194,7 @@ class AiVoiceTypingActivity : ComponentActivity() {
         var selectedLanguage by remember { mutableStateOf(VoiceAiCommitBridge.lastSelectedLanguage) }
         var isProcessingAi by remember { mutableStateOf(false) }
         var spokenPreview by remember { mutableStateOf("") }
-        var statusLine by remember { mutableStateOf("Tap Speak Now — powered by Gemini & ChatGPT AI") }
+        var statusLine by remember { mutableStateOf("Tap Speak Now — Gemini / ChatGPT Roman Urdu & English Voice") }
         var autoLaunchTriggered by remember { mutableStateOf(false) }
 
         val speechLauncher = rememberLauncherForActivityResult(
@@ -212,7 +213,7 @@ class AiVoiceTypingActivity : ComponentActivity() {
                     onCommitAndClose(rawSpoken)
                 } else {
                     isProcessingAi = true
-                    statusLine = "Polishing with Gemini / ChatGPT AI..."
+                    statusLine = "Converting with Gemini / ChatGPT (${selectedMode.shortLabel})..."
                     scope.launch {
                         val aiRes = CloudAiClient.executeTask(
                             context = this@AiVoiceTypingActivity,
@@ -221,11 +222,18 @@ class AiVoiceTypingActivity : ComponentActivity() {
                         )
                         isProcessingAi = false
                         val finalOut = aiRes.outputText.trim().ifBlank { rawSpoken }
+                        AiMemoryVault.recordLearnedCorrection(
+                            context = this@AiVoiceTypingActivity,
+                            originalText = rawSpoken,
+                            preferredText = finalOut,
+                            taskLabel = "Voice ${selectedMode.shortLabel}",
+                            isSensitiveOrIncognito = false,
+                        )
                         onCommitAndClose(finalOut)
                     }
                 }
             } else {
-                statusLine = "Choose language or AI mode below, then tap 'Speak Now'."
+                statusLine = "Choose Roman Urdu, Urdu, or English below, then tap 'Speak Now'."
             }
         }
 

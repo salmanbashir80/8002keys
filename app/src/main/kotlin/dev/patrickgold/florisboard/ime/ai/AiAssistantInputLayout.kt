@@ -304,33 +304,57 @@ fun AiAssistantInputLayout(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // 1. Top Bar: Back to Keyboard (ABC), Connected Account Status, Resize
+        // 1. Compact Header Row: ← ABC, 🎤 Voice, ⤢ Resize, ✓ Account
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            // Big "← Keyboard (ABC)" Button
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(btnBlue)
-                    .clickable { keyboardManager.transitionToImeUiMode(ImeUiMode.TEXT) }
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = null,
-                        tint = textWhite,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(5.dp))
-                    val backLabel = "Keyboard (ABC)"
+                // Compact "← ABC" Button
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(btnBlue)
+                        .clickable { keyboardManager.transitionToImeUiMode(ImeUiMode.TEXT) }
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = null,
+                            tint = textWhite,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        val backLabel = "ABC"
+                        Text(
+                            text = backLabel,
+                            color = textWhite,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+
+                // Quick Voice AI Button (Roman Urdu / English / Urdu)
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFDC2626))
+                        .clickable {
+                            FlorisImeService.switchToVoiceInputMethod(showFailureToast = true)
+                        }
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                ) {
+                    val voiceTopLabel = "🎤 Voice"
                     Text(
-                        text = backLabel,
+                        text = voiceTopLabel,
                         color = textWhite,
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                     )
                 }
@@ -340,7 +364,6 @@ fun AiAssistantInputLayout(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                // Resize Button
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
@@ -349,163 +372,261 @@ fun AiAssistantInputLayout(
                             keyboardManager.transitionToImeUiMode(ImeUiMode.TEXT)
                             windowController?.editor?.enable()
                         }
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                        .padding(horizontal = 9.dp, vertical = 7.dp),
                 ) {
-                    val resizeLabel = "⤢ Resize"
+                    val resizeLabel = "⤢"
                     Text(
                         text = resizeLabel,
                         color = textWhite,
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Bold,
                     )
                 }
 
-                // Account Login Button
                 val accountText = if (vaultState.hasAnyCloudProvider) {
                     "✓ ${vaultState.swiftKeyAccountBadgeLabel()}"
                 } else {
-                    "⚙️ Login Google/GPT"
+                    "⚙️ Login"
                 }
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
                         .background(if (vaultState.hasAnyCloudProvider) btnEmerald else accentAmber.copy(alpha = 0.25f))
                         .clickable { launchAiAssistantSettings(context) }
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
                 ) {
                     Text(
                         text = accountText,
                         color = if (vaultState.hasAnyCloudProvider) textWhite else accentAmber,
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
         }
 
-        // 2. Main 2x2 Grid of Large, Easy-to-Read Action Buttons (zero clipping at any font scale)
+        // 2. TOP SECTION: Smart Message Reader + 1-Tap Auto-Suggested Message + Light-Green Diff
+        val readableSource = sourceEditorText.trim().ifBlank { clipboardText }
+        val autoSmartSuggestion = remember(readableSource) {
+            if (readableSource.length < 3) {
+                null
+            } else {
+                val fixed = LocalGrammarAndRewriteEngine.fixGrammarAndSpelling(readableSource)
+                if (fixed.isNotBlank() && fixed != readableSource) {
+                    fixed
+                } else if (sourceEditorText.isBlank() && clipboardText.isNotBlank()) {
+                    // Clipboard has an incoming message -> offer instant smart reply
+                    LocalGrammarAndRewriteEngine.executeLocalFallback(
+                        task = AiWritingTask.WHATSAPP_REPLY,
+                        input = clipboardText,
+                    )
+                } else {
+                    null
+                }
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(cardDark)
+                .border(1.dp, Color(0xFF334155), RoundedCornerShape(12.dp))
+                .padding(11.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                if (isRunning) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.5.dp,
+                            color = accentGreen,
+                        )
+                        val workingText = "AI Processing (${selectedTask.chipLabel})..."
+                        Text(
+                            text = workingText,
+                            color = accentGreen,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                } else {
+                    val activeSnapshot = sharedLastFix
+                    val activeFixedText = lastResult?.outputText?.takeIf { it.isNotBlank() }
+                        ?: activeSnapshot?.fixedText?.takeIf { it.isNotBlank() }
+                    val activeOriginalText = originalTextBeforeApply
+                        ?: activeSnapshot?.originalText
+                    val activeProvider = lastResult?.providerUsed
+                        ?: activeSnapshot?.providerUsed
+
+                    // Auto-generated 1-Tap Paste Smart Suggestion Card (reads editor or clipboard)
+                    if (!autoSmartSuggestion.isNullOrBlank()) {
+                        val suggestionTitle = if (sourceEditorText.isBlank() && clipboardText.isNotBlank()) {
+                            "✨ Smart Reply Ready — Tap to Paste"
+                        } else {
+                            "✨ Smart Fix Ready — Tap to Paste"
+                        }
+                        val autoDiff = remember(readableSource, autoSmartSuggestion) {
+                            AiDiffHighlighter.buildHighlightedDiff(readableSource, autoSmartSuggestion)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF064E3B))
+                                .border(1.dp, Color(0xFF34D399), RoundedCornerShape(10.dp))
+                                .clickable {
+                                    val rawTarget = sourceEditorText
+                                    originalTextBeforeApply = readableSource
+                                    replaceTextSmartInEditor(
+                                        context = context,
+                                        editorInstance = editorInstance,
+                                        isIncognito = keyboardManager.activeState.isIncognitoMode,
+                                        targetToReplace = rawTarget,
+                                        newText = autoSmartSuggestion,
+                                        taskLabel = "Smart Paste",
+                                    )
+                                    LastAiFixSession.record(
+                                        originalText = readableSource,
+                                        fixedText = autoSmartSuggestion,
+                                        providerUsed = if (vaultState.isGeminiReady) "Google Gemini" else "8002Keys Smart AI",
+                                        taskLabel = "Smart Paste",
+                                    )
+                                    statusMessage = "✓ Pasted smart message"
+                                }
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    text = suggestionTitle,
+                                    color = Color(0xFF86EFAC),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                )
+                                Text(
+                                    text = if (sourceEditorText.isNotBlank()) autoDiff.annotatedText else androidx.compose.ui.text.AnnotatedString(autoSmartSuggestion),
+                                    color = textWhite,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    lineHeight = 20.sp,
+                                )
+                            }
+                        }
+                    } else if (!activeFixedText.isNullOrBlank() && !activeOriginalText.isNullOrBlank()) {
+                        val diffResult = remember(activeOriginalText, activeFixedText) {
+                            AiDiffHighlighter.buildHighlightedDiff(activeOriginalText, activeFixedText)
+                        }
+                        val headerBadge = if (diffResult.changedWordCount > 0) {
+                            "✨ Fixed by ${activeProvider ?: "8002Keys AI"} • ${diffResult.changedWordCount} change(s) in green"
+                        } else {
+                            "✓ Verified by ${activeProvider ?: "8002Keys AI"}"
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF064E3B))
+                                .padding(horizontal = 9.dp, vertical = 4.dp),
+                        ) {
+                            Text(
+                                text = headerBadge,
+                                color = Color(0xFF86EFAC),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Text(
+                            text = diffResult.annotatedText,
+                            color = textWhite,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 21.sp,
+                        )
+                    } else if (readableSource.isNotBlank()) {
+                        val headerHint = if (readableSource.length > 180) {
+                            "📄 Reading long message (${readableSource.length} chars)"
+                        } else {
+                            "📄 Current Message (tap any button below)"
+                        }
+                        Text(
+                            text = headerHint,
+                            color = Color(0xFF93C5FD),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = readableSource,
+                            color = textWhite,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 20.sp,
+                            maxLines = 4,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    } else {
+                        val emptyGuide = "Type or tap 🎤 Voice to speak — or tap a quick message to paste:"
+                        Text(
+                            text = emptyGuide,
+                            color = textMuted,
+                            fontSize = 12.sp,
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            listOf(
+                                "Assalamu Alaikum, kya haal hai?",
+                                "Ji bilkul, abhi karta hoon.",
+                                "I am on my way, see you soon!",
+                            ).forEach { sample ->
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(btnSlate)
+                                        .clickable { editorInstance.commitText(sample) }
+                                        .padding(horizontal = 9.dp, vertical = 6.dp),
+                                ) {
+                                    Text(
+                                        text = "+ $sample",
+                                        color = textWhite,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. BOTTOM SECTION: All Action Buttons Cleanly Below the Text Box
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            // Button 1: Fix Grammar & Spelling
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .defaultMinSize(minHeight = 46.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .defaultMinSize(minHeight = 42.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(btnBlue)
                     .clickable { runTaskAndApply(AiWritingTask.FIX_GRAMMAR_SPELLING) }
-                    .padding(horizontal = 8.dp, vertical = 10.dp),
+                    .padding(horizontal = 6.dp, vertical = 9.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                val label1 = "✨ Fix Grammar"
+                val label1 = "✨ Fix"
                 Text(
                     text = label1,
-                    color = textWhite,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-
-            // Button 2: Translate in Urdu (اردو)
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .defaultMinSize(minHeight = 46.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(btnEmerald)
-                    .clickable { runTaskAndApply(AiWritingTask.TO_URDU_SCRIPT) }
-                    .padding(horizontal = 8.dp, vertical = 10.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                val label2 = "🇵🇰 Translate Urdu"
-                Text(
-                    text = label2,
-                    color = textWhite,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            // Button 3: Translate in English
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .defaultMinSize(minHeight = 46.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(btnIndigo)
-                    .clickable { runTaskAndApply(AiWritingTask.ROMAN_URDU_TO_ENGLISH) }
-                    .padding(horizontal = 8.dp, vertical = 10.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                val label3 = "🇬🇧 To English"
-                Text(
-                    text = label3,
-                    color = textWhite,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-
-            // Button 4: English -> Roman Urdu
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .defaultMinSize(minHeight = 46.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(btnTeal)
-                    .clickable { runTaskAndApply(AiWritingTask.ENGLISH_TO_ROMAN_URDU) }
-                    .padding(horizontal = 8.dp, vertical = 10.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                val label4 = "🇵🇰 Roman Urdu"
-                Text(
-                    text = label4,
-                    color = textWhite,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-
-        // 3. Secondary Quick Row: Voice AI, Smart Reply, Professional Polish, Undo
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .defaultMinSize(minHeight = 40.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFFDC2626))
-                    .clickable {
-                        FlorisImeService.switchToVoiceInputMethod(showFailureToast = true)
-                    }
-                    .padding(horizontal = 6.dp, vertical = 8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                val voiceLabel = "🎤 Voice AI"
-                Text(
-                    voiceLabel,
                     color = textWhite,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
@@ -517,7 +638,76 @@ fun AiAssistantInputLayout(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .defaultMinSize(minHeight = 40.dp)
+                    .defaultMinSize(minHeight = 42.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(btnEmerald)
+                    .clickable { runTaskAndApply(AiWritingTask.TO_URDU_SCRIPT) }
+                    .padding(horizontal = 6.dp, vertical = 9.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                val label2 = "🇵🇰 Urdu"
+                Text(
+                    text = label2,
+                    color = textWhite,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .defaultMinSize(minHeight = 42.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(btnIndigo)
+                    .clickable { runTaskAndApply(AiWritingTask.ROMAN_URDU_TO_ENGLISH) }
+                    .padding(horizontal = 6.dp, vertical = 9.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                val label3 = "🇬🇧 Eng"
+                Text(
+                    text = label3,
+                    color = textWhite,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .defaultMinSize(minHeight = 42.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(btnTeal)
+                    .clickable { runTaskAndApply(AiWritingTask.ENGLISH_TO_ROMAN_URDU) }
+                    .padding(horizontal = 6.dp, vertical = 9.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                val label4 = "🇵🇰 Roman"
+                Text(
+                    text = label4,
+                    color = textWhite,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+
+        // 4. Secondary Compact Row: Smart Reply, Professional, Undo
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .defaultMinSize(minHeight = 38.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(btnSlate)
                     .clickable { runTaskAndApply(AiWritingTask.WHATSAPP_REPLY) }
@@ -538,7 +728,7 @@ fun AiAssistantInputLayout(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .defaultMinSize(minHeight = 40.dp)
+                    .defaultMinSize(minHeight = 38.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(btnSlate)
                     .clickable { runTaskAndApply(AiWritingTask.TONE_PROFESSIONAL) }
@@ -560,7 +750,7 @@ fun AiAssistantInputLayout(
             if (!undoTarget.isNullOrBlank()) {
                 Box(
                     modifier = Modifier
-                        .height(38.dp)
+                        .defaultMinSize(minHeight = 38.dp)
                         .clip(RoundedCornerShape(10.dp))
                         .background(accentAmber.copy(alpha = 0.25f))
                         .border(1.dp, accentAmber, RoundedCornerShape(10.dp))
@@ -577,149 +767,11 @@ fun AiAssistantInputLayout(
                             LastAiFixSession.clear()
                             statusMessage = "↩ Reverted to original text"
                         }
-                        .padding(horizontal = 12.dp),
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     val undoLabel = "↩ Undo"
-                    Text(undoLabel, color = accentAmber, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-
-        // 4. Large Readable Text Preview & Light-Green Diff Result Box
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(cardDark)
-                .border(1.dp, Color(0xFF334155), RoundedCornerShape(12.dp))
-                .padding(12.dp),
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (isRunning) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.5.dp,
-                            color = accentGreen,
-                        )
-                        val workingText = "AI Processing (${selectedTask.chipLabel})..."
-                        Text(
-                            text = workingText,
-                            color = accentGreen,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                } else {
-                    val activeSnapshot = sharedLastFix
-                    val activeFixedText = lastResult?.outputText?.takeIf { it.isNotBlank() }
-                        ?: activeSnapshot?.fixedText?.takeIf { it.isNotBlank() }
-                    val activeOriginalText = originalTextBeforeApply
-                        ?: activeSnapshot?.originalText
-                    val activeProvider = lastResult?.providerUsed
-                        ?: activeSnapshot?.providerUsed
-
-                    if (!activeFixedText.isNullOrBlank() && !activeOriginalText.isNullOrBlank()) {
-                        val diffResult = remember(activeOriginalText, activeFixedText) {
-                            AiDiffHighlighter.buildHighlightedDiff(activeOriginalText, activeFixedText)
-                        }
-                        val headerBadge = if (diffResult.changedWordCount > 0) {
-                            "✨ Fixed by ${activeProvider ?: "8002Keys AI"} • ${diffResult.changedWordCount} change(s) in green"
-                        } else {
-                            "✓ Verified by ${activeProvider ?: "8002Keys AI"}"
-                        }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFF064E3B))
-                                .padding(horizontal = 10.dp, vertical = 5.dp),
-                        ) {
-                            Text(
-                                text = headerBadge,
-                                color = Color(0xFF86EFAC),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        Text(
-                            text = diffResult.annotatedText,
-                            color = textWhite,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium,
-                            lineHeight = 23.sp,
-                        )
-                    } else {
-                        val displayText = sourceEditorText.trim().takeIf { it.isNotBlank() }
-                            ?: clipboardText.takeIf { it.isNotBlank() }
-
-                        if (!statusMessage.isNullOrBlank()) {
-                            Text(
-                                text = statusMessage!!,
-                                color = accentGreen,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        } else if (!displayText.isNullOrBlank() && displayText.length > 180) {
-                            Text(
-                                text = "📄 Long text ready (${displayText.length} chars) — tap Fix Grammar or Translate",
-                                color = Color(0xFF93C5FD),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
-
-                        if (!displayText.isNullOrBlank()) {
-                            Text(
-                                text = displayText,
-                                color = textWhite,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium,
-                                lineHeight = 22.sp,
-                            )
-                        } else {
-                            val emptyGuide = "Tap any phrase below to test or insert, or tap 'Keyboard (ABC)' to type your message:"
-                            Text(
-                                text = emptyGuide,
-                                color = textMuted,
-                                fontSize = 14.sp,
-                            )
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                listOf(
-                                    "Ana hay milna b hay",
-                                    "I am coming to Lahore tomorrow",
-                                    "Assalamu Alaikum, kya haal hai?",
-                                ).forEach { sample ->
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(btnSlate)
-                                            .clickable {
-                                                editorInstance.commitText(sample)
-                                            }
-                                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                                    ) {
-                                        Text(
-                                            text = "+ \"$sample\"",
-                                            color = textWhite,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Medium,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    Text(undoLabel, color = accentAmber, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -847,43 +899,43 @@ fun LiveAiSmartStrip(
         modifier = modifier
             .fillMaxWidth()
             .background(stripBg)
-            .padding(horizontal = 8.dp, vertical = 5.dp)
+            .padding(horizontal = 6.dp, vertical = 4.dp)
             .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // 1. SwiftKey 4-Column Grid Menu Button
+        // 1. Compact SwiftKey 4-Column Grid Menu Button
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .background(pillBg)
-                .border(1.dp, Color(0xFF404040), RoundedCornerShape(10.dp))
+                .border(1.dp, Color(0xFF404040), RoundedCornerShape(8.dp))
                 .clickable {
                     keyboardManager.activeState.isActionsOverflowVisible =
                         !keyboardManager.activeState.isActionsOverflowVisible
                 }
-                .padding(horizontal = 11.dp, vertical = 6.dp),
+                .padding(horizontal = 9.dp, vertical = 5.dp),
         ) {
-            val menuLabel = "⊞ Menu"
+            val menuLabel = "⊞"
             Text(
                 text = menuLabel,
                 color = textWhite,
-                fontSize = 13.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
             )
         }
 
-        // 1b. Built-in Gemini & ChatGPT AI Voice Typing Button
+        // 1b. Compact Built-in Gemini & ChatGPT AI Voice Typing Button (Roman Urdu / English / Urdu)
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .background(Color(0xFFDC2626))
                 .clickable {
                     FlorisImeService.switchToVoiceInputMethod(showFailureToast = true)
                 }
-                .padding(horizontal = 11.dp, vertical = 6.dp),
+                .padding(horizontal = 9.dp, vertical = 5.dp),
         ) {
-            val voiceAiLabel = "🎤 Voice AI"
+            val voiceAiLabel = "🎤"
             Text(
                 text = voiceAiLabel,
                 color = textWhite,
@@ -892,63 +944,63 @@ fun LiveAiSmartStrip(
             )
         }
 
-        // 1c. Light-Green Model Attribution & Diff Pill (tap to view highlighted changes + Undo)
+        // 1c. Compact Light-Green Diff Pill (tap to view highlighted changes + Undo)
         val latestFix = sharedLastFix
         if (latestFix != null) {
             val diffBadge = if (latestFix.changedWordCount > 0) {
-                "✓ ${latestFix.changedWordCount} fixed (${latestFix.shortProviderBadge()}) • Diff"
+                "✓ ${latestFix.changedWordCount} (${latestFix.shortProviderBadge()})"
             } else {
-                "✓ Verified (${latestFix.shortProviderBadge()})"
+                "✓ ${latestFix.shortProviderBadge()}"
             }
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(Color(0xFF86EFAC))
                     .clickable {
                         keyboardManager.transitionToImeUiMode(ImeUiMode.AI_ASSISTANT)
                     }
-                    .padding(horizontal = 11.dp, vertical = 6.dp),
+                    .padding(horizontal = 8.dp, vertical = 5.dp),
             ) {
                 Text(
                     text = diffBadge,
                     color = Color(0xFF052E16),
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.ExtraBold,
                     maxLines = 1,
                 )
             }
         }
 
-        // 2. Auto-Update Ready Pill (if a newer GitHub build exists)
+        // 2. Compact Auto-Update Badge (instead of a wide banner)
         val updateInfo = latestUpdate
         if (updateInfo != null && updateInfo.isUpdateAvailable) {
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(accentAmber)
                     .clickable {
                         FlorisImeService.hideUi()
                         AppUpdateManager.openAppAndShowUpdateDialog(context)
                     }
-                    .padding(horizontal = 11.dp, vertical = 6.dp),
+                    .padding(horizontal = 8.dp, vertical = 5.dp),
             ) {
-                val updatePillLabel = "🚀 Update APK (${updateInfo.remoteShortCommit})"
+                val updatePillLabel = "🚀 Upd"
                 Text(
                     text = updatePillLabel,
                     color = Color.Black,
-                    fontSize = 13.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.ExtraBold,
                 )
             }
         }
 
-        // 3. Live Auto-Detected Grammar / Spelling Correction Pill (14sp Bold, 1-tap replaces sentence!)
+        // 3. Compact Live Auto-Detected Grammar / Spelling Fix Pill
         val suggestion = liveSuggestion
         if (suggestion != null) {
             val (orig, fixed) = suggestion
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(accentTeal)
                     .clickable {
                         replaceTextSmartInEditor(
@@ -967,140 +1019,136 @@ fun LiveAiSmartStrip(
                         )
                         liveSuggestion = null
                     }
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = 9.dp, vertical = 5.dp),
             ) {
-                val fixChipText = "✨ Fix: \"${fixed.take(38)}\" ✓"
+                val fixChipText = "✨ ${fixed.take(26)} ✓"
                 Text(
                     text = fixChipText,
                     color = textWhite,
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                 )
             }
         }
 
-        // 4. 1-Tap Fix Grammar Button
+        // 4. Compact 1-Tap Fix Grammar Button
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .background(if (isWorking) accentAmber else accentBlue)
                 .clickable { executeInPlaceTask(AiWritingTask.FIX_GRAMMAR_SPELLING) }
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 9.dp, vertical = 5.dp),
         ) {
-            val fixBtnLabel = if (isWorking) "⏳ Working..." else "✨ Fix Grammar"
+            val fixBtnLabel = if (isWorking) "⏳" else "✨ Fix"
             Text(
                 text = fixBtnLabel,
                 color = textWhite,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
             )
         }
 
-        // 5. 1-Tap Translate in Urdu (اردو) Button
+        // 5. Compact 1-Tap Urdu Button
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .background(accentTeal)
                 .clickable { executeInPlaceTask(AiWritingTask.TO_URDU_SCRIPT) }
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 9.dp, vertical = 5.dp),
         ) {
-            val urduBtnLabel = "🇵🇰 Translate in Urdu (اردو)"
+            val urduBtnLabel = "🇵🇰 Urdu"
             Text(
                 text = urduBtnLabel,
                 color = textWhite,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
             )
         }
 
-        // 6. 1-Tap Translate in English Button
+        // 6. Compact 1-Tap English Button
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .background(accentIndigo)
                 .clickable { executeInPlaceTask(AiWritingTask.ROMAN_URDU_TO_ENGLISH) }
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 9.dp, vertical = 5.dp),
         ) {
-            val engBtnLabel = "🇬🇧 Translate in English"
+            val engBtnLabel = "🇬🇧 Eng"
             Text(
                 text = engBtnLabel,
                 color = textWhite,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
             )
         }
 
-        // 7. 1-Tap English -> Roman Urdu Button
+        // 7. Compact Open Full AI Panel Button
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .background(pillBg)
-                .border(1.dp, Color(0xFF404040), RoundedCornerShape(10.dp))
-                .clickable { executeInPlaceTask(AiWritingTask.ENGLISH_TO_ROMAN_URDU) }
-                .padding(horizontal = 11.dp, vertical = 6.dp),
-        ) {
-            val romanBtnLabel = "🇵🇰 Roman Urdu"
-            Text(
-                text = romanBtnLabel,
-                color = textWhite,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-
-        // 8. Open Full Bottom AI Panel
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .background(pillBg)
-                .border(1.dp, accentTeal, RoundedCornerShape(10.dp))
+                .border(1.dp, accentTeal, RoundedCornerShape(8.dp))
                 .clickable { keyboardManager.transitionToImeUiMode(ImeUiMode.AI_ASSISTANT) }
-                .padding(horizontal = 11.dp, vertical = 6.dp),
+                .padding(horizontal = 9.dp, vertical = 5.dp),
         ) {
-            val panelBtnLabel = "✨ AI Panel ▾"
+            val panelBtnLabel = "✨ AI"
             Text(
                 text = panelBtnLabel,
                 color = textWhite,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
             )
         }
 
-        // 9. 1-Tap Resize Keyboard
+        // 8. Compact Roman Urdu Button
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .background(pillBg)
-                .clickable { windowController?.editor?.toggleEnabled() }
-                .padding(horizontal = 11.dp, vertical = 6.dp),
+                .border(1.dp, Color(0xFF404040), RoundedCornerShape(8.dp))
+                .clickable { executeInPlaceTask(AiWritingTask.ENGLISH_TO_ROMAN_URDU) }
+                .padding(horizontal = 9.dp, vertical = 5.dp),
         ) {
-            val resizeBtnLabel = "⤢ Resize"
+            val romanBtnLabel = "🇵🇰 Roman"
             Text(
-                text = resizeBtnLabel,
+                text = romanBtnLabel,
                 color = textWhite,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
             )
         }
 
-        // 10. Account / Login Status
-        val loginLabel = if (vaultState.hasAnyCloudProvider) {
-            "👤 ${vaultState.swiftKeyAccountBadgeLabel()} ✓"
-        } else {
-            "👤 Login Google / ChatGPT"
-        }
+        // 9. Compact Resize Button
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(8.dp))
+                .background(pillBg)
+                .clickable { windowController?.editor?.toggleEnabled() }
+                .padding(horizontal = 8.dp, vertical = 5.dp),
+        ) {
+            val resizeBtnLabel = "⤢"
+            Text(
+                text = resizeBtnLabel,
+                color = textWhite,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+
+        // 10. Compact Account Status Pill
+        val loginLabel = if (vaultState.hasAnyCloudProvider) "👤 ✓" else "👤 Login"
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
                 .background(if (vaultState.hasAnyCloudProvider) pillBg else accentAmber)
                 .clickable { launchAiAssistantSettings(context) }
-                .padding(horizontal = 11.dp, vertical = 6.dp),
+                .padding(horizontal = 8.dp, vertical = 5.dp),
         ) {
             Text(
                 text = loginLabel,
                 color = if (vaultState.hasAnyCloudProvider) Color(0xFF34D399) else Color.Black,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
             )
         }
