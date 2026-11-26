@@ -1676,28 +1676,40 @@ object CloudAiClient {
         val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" +
             "${java.net.URLEncoder.encode(model, "UTF-8")}:generateContent?key=${java.net.URLEncoder.encode(apiKey, "UTF-8")}"
         val payload = buildJsonObject {
-            putJsonArray("contents") {
-                add(
-                    buildJsonObject {
-                        put("role", "user")
-                        putJsonArray("parts") {
-                            add(buildJsonObject { put("text", instruction) })
-                            add(
-                                buildJsonObject {
-                                    putJsonObject("inlineData") {
-                                        put("mimeType", mimeType)
-                                        put("data", base64Audio)
-                                    }
+            put(
+                "contents",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("role", "user")
+                            put(
+                                "parts",
+                                buildJsonArray {
+                                    add(buildJsonObject { put("text", instruction) })
+                                    add(
+                                        buildJsonObject {
+                                            put(
+                                                "inlineData",
+                                                buildJsonObject {
+                                                    put("mimeType", mimeType)
+                                                    put("data", base64Audio)
+                                                },
+                                            )
+                                        },
+                                    )
                                 },
                             )
-                        }
-                    },
-                )
-            }
-            putJsonObject("generationConfig") {
-                put("temperature", 0.1)
-                put("maxOutputTokens", 512)
-            }
+                        },
+                    )
+                },
+            )
+            put(
+                "generationConfig",
+                buildJsonObject {
+                    put("temperature", 0.1)
+                    put("maxOutputTokens", 512)
+                },
+            )
         }
         val responseBody = postJson(endpoint, payload.toString(), headers = emptyMap())
         val root = json.parseToJsonElement(responseBody).jsonObject
