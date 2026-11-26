@@ -96,9 +96,12 @@ sealed interface ImeWindowProps {
                 .coerceIn(constraints.minPaddingHorizontal, constraints.maxPaddingHorizontal)
             newPaddingLeft = newPaddingHorizontal.coerceAtMost(newPaddingLeft)
             newPaddingRight = newPaddingHorizontal - newPaddingLeft
+            val maxAllowedBottomPadding = (rootBounds.height - newKeyboardHeight - 120.dp)
+                .coerceAtLeast(constraints.maxKeyboardHeight - newKeyboardHeight)
+                .coerceAtLeast(0.dp)
             val newPaddingBottom = paddingBottom
                 .takeOrElse { 0.dp }
-                .coerceIn(0.dp, constraints.maxKeyboardHeight - newKeyboardHeight)
+                .coerceIn(0.dp, maxAllowedBottomPadding)
             return Fixed(
                 keyboardHeight = newKeyboardHeight,
                 paddingLeft = newPaddingLeft,

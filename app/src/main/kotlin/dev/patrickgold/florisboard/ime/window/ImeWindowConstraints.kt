@@ -123,10 +123,10 @@ sealed class ImeWindowConstraints(rootInsets: ImeInsets.Root) {
             val factor = when (formFactor.typeGuess) {
                 ImeFormFactor.Type.DESKTOP,
                 ImeFormFactor.Type.LARGE_TABLET,
-                ImeFormFactor.Type.TABLET_LANDSCAPE -> 0.64f
-                ImeFormFactor.Type.TABLET_PORTRAIT -> 0.38f
-                ImeFormFactor.Type.PHONE_LANDSCAPE -> 0.66f
-                ImeFormFactor.Type.PHONE_PORTRAIT -> 0.46f
+                ImeFormFactor.Type.TABLET_LANDSCAPE -> 0.68f
+                ImeFormFactor.Type.TABLET_PORTRAIT -> 0.55f
+                ImeFormFactor.Type.PHONE_LANDSCAPE -> 0.70f
+                ImeFormFactor.Type.PHONE_PORTRAIT -> 0.62f
             }
             (baselineScreen.height * factor).coerceIn(minKeyboardHeight, rootBounds.height)
         }
