@@ -335,7 +335,7 @@ class AiVoiceTypingActivity : ComponentActivity() {
                     onCommitAndClose(text)
                 } else {
                     speechUnavailable = true
-                    statusLine = res.errorMessage ?: "Could not transcribe. Check Gemini/ChatGPT key or enable Google Speech."
+                    statusLine = res.warningMessage ?: "Could not transcribe. Check Gemini/ChatGPT key or enable Google Speech."
                 }
             }
         }

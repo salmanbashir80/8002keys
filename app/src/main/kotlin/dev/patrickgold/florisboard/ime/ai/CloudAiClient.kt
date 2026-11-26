@@ -1583,8 +1583,8 @@ object CloudAiClient {
             return@withContext AiExecutionResult(
                 outputText = "",
                 providerUsed = "Voice AI",
-                usedCloudAi = false,
-                errorMessage = "Empty audio recording.",
+                usedCloud = false,
+                warningMessage = "Empty audio recording.",
             )
         }
         val vault = AiMemoryVault.state.value
@@ -1615,7 +1615,7 @@ object CloudAiClient {
                     return@withContext AiExecutionResult(
                         outputText = transcribed,
                         providerUsed = "Google Gemini Voice (${vault.geminiModel})",
-                        usedCloudAi = true,
+                        usedCloud = true,
                     )
                 }
             }.onFailure { err ->
@@ -1647,7 +1647,7 @@ object CloudAiClient {
                     return@withContext AiExecutionResult(
                         outputText = finalText,
                         providerUsed = "ChatGPT Whisper Voice",
-                        usedCloudAi = true,
+                        usedCloud = true,
                     )
                 }
             }.onFailure { err ->
@@ -1658,8 +1658,8 @@ object CloudAiClient {
         AiExecutionResult(
             outputText = "",
             providerUsed = "Voice AI",
-            usedCloudAi = false,
-            errorMessage = errors.joinToString(" | ").ifBlank {
+            usedCloud = false,
+            warningMessage = errors.joinToString(" | ").ifBlank {
                 "Connect a Gemini or ChatGPT API key in 8002Keys AI Settings, or enable Google Speech / Offline Voice."
             },
         )
