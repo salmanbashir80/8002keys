@@ -71,11 +71,12 @@ jobs:
           SHORT_SHA=$(git rev-parse --short HEAD)
           COMMIT_MSG=$(git log -1 --pretty=%s)
           PUBLISHED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          VERSION_CODE=$((2119 + ${GITHUB_RUN_NUMBER:-0}))
           jq -n \
             --arg packageName "com.salmanbashir.keys8002" \
             --arg appName "8002Keys" \
             --arg versionName "1.9.70-debug+${SHORT_SHA}" \
-            --argjson versionCode 2119 \
+            --argjson versionCode "${VERSION_CODE}" \
             --arg commit "${GITHUB_SHA}" \
             --arg shortCommit "${SHORT_SHA}" \
             --arg commitMessage "${COMMIT_MSG}" \
