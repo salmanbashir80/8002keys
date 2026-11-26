@@ -610,6 +610,8 @@ class AiVoiceTypingActivity : ComponentActivity() {
                             text = if (spokenPreview.isNotBlank()) "\"$spokenPreview\"" else statusLine,
                             color = textMuted,
                             fontSize = 14.sp,
+                            maxLines = 4,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
 
