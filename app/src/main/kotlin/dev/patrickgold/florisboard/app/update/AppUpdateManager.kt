@@ -432,10 +432,13 @@ object AppUpdateManager {
             runCatching { AiMemoryVault.saveToPersistentStorageNow(context) }
 
             val updatesDir = File(context.cacheDir, "app-updates").apply { mkdirs() }
-            val targetApk = File(updatesDir, "8002Keys-update.apk")
-            if (targetApk.exists()) {
-                targetApk.delete()
+            updatesDir.listFiles()?.forEach { oldFile ->
+                if (oldFile.name.endsWith(".apk", ignoreCase = true)) {
+                    runCatching { oldFile.delete() }
+                }
             }
+            val uniqueTag = info.remoteShortCommit.ifBlank { System.currentTimeMillis().toString() }
+            val targetApk = File(updatesDir, "8002Keys-update-$uniqueTag-${System.currentTimeMillis()}.apk")
 
             var currentUrl = info.downloadUrl.ifBlank { DEFAULT_APK_DOWNLOAD_URL }
             var redirects = 0
