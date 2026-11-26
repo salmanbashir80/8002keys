@@ -1711,7 +1711,7 @@ object CloudAiClient {
                 },
             )
         }
-        val responseBody = postJson(endpoint, payload.toString(), headers = emptyMap())
+        val responseBody = postJson(url = endpoint, headers = emptyMap(), body = payload.toString())
         val root = json.parseToJsonElement(responseBody).jsonObject
         val text = root["candidates"]?.jsonArray?.firstOrNull()?.jsonObject
             ?.get("content")?.jsonObject
