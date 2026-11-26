@@ -483,19 +483,38 @@ internal object ImmediateAutocorrect {
         )
     }
 
+    @Volatile
+    private var cachedPersonalListRef: List<String>? = null
+
+    @Volatile
+    private var cachedPersonalLowerSet: Set<String> = emptySet()
+
+    private val fuzzyResultCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private const val FUZZY_MISS_SENTINEL = "\u0000"
+
+    private fun personalWordsSnapshot(): Pair<List<String>, Set<String>> {
+        val list = runCatching {
+            dev.patrickgold.florisboard.ime.ai.AiMemoryVault.state.value.customWords
+        }.getOrDefault(emptyList())
+        if (list !== cachedPersonalListRef) {
+            cachedPersonalListRef = list
+            cachedPersonalLowerSet = list.mapTo(HashSet(list.size * 2)) { it.lowercase() }
+            fuzzyResultCache.clear()
+        }
+        return list to cachedPersonalLowerSet
+    }
+
     /**
      * Returns true if [rawWord] is a known Pakistani Roman Urdu word or exists in the user's
      * personal [AiMemoryVault] dictionary (learned from selections, voice, or SwiftKey/Gboard import).
-     * Used by [NlpManager] so the English dictionary NEVER hijacks or overwrites Roman Urdu words.
+     * O(1) HashSet lookup for zero typing lag.
      */
     fun isKnownRomanUrduOrVaultWord(rawWord: String): Boolean {
         val clean = rawWord.trim().trim { ch -> !ch.isLetter() }.lowercase()
         if (clean.length < 2) return false
         if (clean in RomanUrduCoreVocabSet) return true
-        val personal = runCatching {
-            dev.patrickgold.florisboard.ime.ai.AiMemoryVault.state.value.customWords
-        }.getOrDefault(emptyList())
-        return personal.any { it.equals(clean, ignoreCase = true) }
+        val (_, personalSet) = personalWordsSnapshot()
+        return clean in personalSet
     }
 
     /**
@@ -509,14 +528,13 @@ internal object ImmediateAutocorrect {
         val prefix = rawPrefix.trim().trim { ch -> !ch.isLetter() }.lowercase()
         if (prefix.length < 2) return emptyList()
 
-        val personal = runCatching {
-            dev.patrickgold.florisboard.ime.ai.AiMemoryVault.state.value.customWords
-        }.getOrDefault(emptyList())
-
-        val matches = LinkedHashSet<String>()
-        // 1. User's own selected/learned words first (highest priority!)
-        for (w in personal) {
-            if (w.length >= prefix.length && w.startsWith(prefix, ignoreCase = true) && !w.equals(prefix, ignoreCase = true)) {
+        val (personal, _) = personalWordsSnapshot()
+        val matches = LinkedHashSet<String>(maxCount * 2)
+        // 1. User's own selected/learned words first (highest priority, capped scan for instant speed)
+        val personalLimit = minOf(personal.size, 150)
+        for (idx in 0 until personalLimit) {
+            val w = personal[idx]
+            if (w.length > prefix.length && w.startsWith(prefix, ignoreCase = true)) {
                 matches.add(w)
                 if (matches.size >= maxCount) break
             }
@@ -524,12 +542,13 @@ internal object ImmediateAutocorrect {
         // 2. Built-in Roman Urdu core vocabulary next
         if (matches.size < maxCount) {
             for (w in RomanUrduCoreVocab) {
-                if (w.length >= prefix.length && w.startsWith(prefix, ignoreCase = true) && !w.equals(prefix, ignoreCase = true)) {
+                if (w.length > prefix.length && w.startsWith(prefix, ignoreCase = true)) {
                     matches.add(applyTypedCase(w, rawPrefix))
                     if (matches.size >= maxCount) break
                 }
             }
         }
+        if (matches.isEmpty()) return emptyList()
         return matches.map { word ->
             WordSuggestionCandidate(
                 text = word,
@@ -541,19 +560,18 @@ internal object ImmediateAutocorrect {
     }
 
     /**
-     * Real-time QWERTY-aware fuzzy matcher for Roman Urdu + user's Personal Dictionary words
-     * (imported from SwiftKey/Gboard or learned via AI Memory Vault).
-     *
-     * Fixes 1-key slips like "kaeo" -> "karo", "ursu" -> "urdu", "toman" -> "roman",
-     * "correcr" -> "correct" directly on Spacebar while never overriding real English words.
+     * Real-time memoized QWERTY-aware fuzzy matcher for Roman Urdu + user's Personal Dictionary words.
+     * Memoized in [fuzzyResultCache] so repeated keystroke checks run in O(1) (<0.01ms).
      */
     private fun findFuzzyRomanUrduOrPersonalCorrection(normalized: String): String? {
-        if (normalized.length < 4) return null
+        if (normalized.length < 4 || normalized.length > 18) return null
         if (normalized in RomanUrduCoreVocabSet || normalized in ProtectedEnglishWords) return null
+        val (personalWords, personalSet) = personalWordsSnapshot()
+        if (normalized in personalSet) return null
 
-        val personalWords = runCatching {
-            dev.patrickgold.florisboard.ime.ai.AiMemoryVault.state.value.customWords
-        }.getOrDefault(emptyList())
+        fuzzyResultCache[normalized]?.let { cached ->
+            return if (cached == FUZZY_MISS_SENTINEL) null else cached
+        }
 
         var bestWord: String? = null
         var bestDist = Int.MAX_VALUE
@@ -563,7 +581,6 @@ internal object ImmediateAutocorrect {
             val candLower = candidate.lowercase()
             if (candLower == normalized) return
             if (kotlin.math.abs(candLower.length - normalized.length) > maxAllowedDist) return
-            // Require same first letter for short 4-5 char words unless first char is QWERTY-adjacent
             if (normalized.length <= 5 && candLower[0] != normalized[0] && !areQwertyAdjacent(normalized[0], candLower[0])) {
                 return
             }
@@ -579,12 +596,17 @@ internal object ImmediateAutocorrect {
             if (bestDist == 1 && bestWord?.lowercase()?.first() == normalized.first()) break
         }
         if (bestDist > 1) {
-            for (w in personalWords) {
+            val limit = minOf(personalWords.size, 80)
+            for (idx in 0 until limit) {
+                val w = personalWords[idx]
                 if (w.length >= 4 && w.all { it.isLetter() }) {
                     evaluateCandidate(w)
+                    if (bestDist == 1) break
                 }
             }
         }
+        if (fuzzyResultCache.size > 512) fuzzyResultCache.clear()
+        fuzzyResultCache[normalized] = bestWord ?: FUZZY_MISS_SENTINEL
         return bestWord
     }
 

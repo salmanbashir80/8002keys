@@ -254,14 +254,17 @@ object AiMemoryVault {
             .distinct()
             .take(250)
         if (tokens.isEmpty()) return
+        val existingLower = _state.value.customWords.mapTo(HashSet()) { it.lowercase() }
+        val newlyAdded = tokens.filter { it.lowercase() !in existingLower }
+        if (newlyAdded.isEmpty()) return
         updateState(context) { current ->
-            val merged = (tokens + current.customWords)
+            val merged = (newlyAdded + current.customWords)
                 .distinctBy { it.lowercase() }
                 .take(MAX_CUSTOM_WORDS)
             current.copy(customWords = merged)
         }
         scope.launch {
-            hydrateCustomWordsIntoDictionary(tokens)
+            hydrateCustomWordsIntoDictionary(newlyAdded)
         }
     }
 

@@ -293,7 +293,6 @@ private fun ImeInnerWindow() {
             .ifIsInstance<ImeWindowProps.Fixed>(placementProps) { props ->
                 Modifier
                     .safeDrawingPadding()
-                    .systemGestureExclusion()
                     .padding(
                         start = props.paddingLeft.coerceAtLeast(0.dp),
                         end = props.paddingRight.coerceAtLeast(0.dp),
