@@ -1674,7 +1674,7 @@ object CloudAiClient {
     ): String {
         val base64Audio = java.util.Base64.getEncoder().encodeToString(audioBytes)
         val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" +
-            "${URLEncoder.encode(model, "UTF-8")}:generateContent?key=${URLEncoder.encode(apiKey, "UTF-8")}"
+            "${java.net.URLEncoder.encode(model, "UTF-8")}:generateContent?key=${java.net.URLEncoder.encode(apiKey, "UTF-8")}"
         val payload = buildJsonObject {
             putJsonArray("contents") {
                 add(
