@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -70,11 +71,109 @@ import dev.patrickgold.florisboard.app.update.AppUpdateManager
 import dev.patrickgold.florisboard.clipboardManager
 import dev.patrickgold.florisboard.editorInstance
 import dev.patrickgold.florisboard.ime.ImeUiMode
+import dev.patrickgold.florisboard.ime.editor.EditorContent
+import dev.patrickgold.florisboard.ime.editor.EditorInstance
 import dev.patrickgold.florisboard.ime.keyboard.FlorisImeSizing
 import dev.patrickgold.florisboard.keyboardManager
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.florisboard.lib.android.showShortToastSync
+
+private const val MAX_AI_EDITOR_CHARS = 2500
+
+data class LastAiFixSnapshot(
+    val originalText: String,
+    val fixedText: String,
+    val providerUsed: String,
+    val taskLabel: String,
+    val changedWordCount: Int,
+) {
+    fun shortProviderBadge(): String {
+        val lower = providerUsed.lowercase()
+        return when {
+            "gemini" in lower -> "Gemini"
+            "chatgpt" in lower || "openai" in lower -> "ChatGPT"
+            "translate" in lower -> "Google Translate"
+            "languagetool" in lower -> "Grammar AI"
+            else -> "8002Keys AI"
+        }
+    }
+}
+
+object LastAiFixSession {
+    private val _latestFix = MutableStateFlow<LastAiFixSnapshot?>(null)
+    val latestFix: StateFlow<LastAiFixSnapshot?> = _latestFix.asStateFlow()
+
+    fun record(
+        originalText: String,
+        fixedText: String,
+        providerUsed: String,
+        taskLabel: String,
+    ): LastAiFixSnapshot {
+        val diff = AiDiffHighlighter.buildHighlightedDiff(originalText, fixedText)
+        val snapshot = LastAiFixSnapshot(
+            originalText = originalText,
+            fixedText = fixedText,
+            providerUsed = providerUsed,
+            taskLabel = taskLabel,
+            changedWordCount = diff.changedWordCount,
+        )
+        _latestFix.value = snapshot
+        return snapshot
+    }
+
+    fun clear() {
+        _latestFix.value = null
+    }
+}
+
+private fun extractFullEditorText(activeContent: EditorContent): String {
+    if (activeContent.selectedText.isNotBlank()) {
+        return activeContent.selectedText.take(MAX_AI_EDITOR_CHARS)
+    }
+    return activeContent.textBeforeSelection.takeLast(MAX_AI_EDITOR_CHARS)
+}
+
+private fun replaceTextSmartInEditor(
+    context: Context,
+    editorInstance: EditorInstance,
+    isIncognito: Boolean,
+    targetToReplace: String,
+    newText: String,
+    taskLabel: String,
+) {
+    val content = editorInstance.activeContent
+    if (content.selectedText.isNotEmpty()) {
+        editorInstance.commitText(newText)
+    } else if (targetToReplace.isNotEmpty() && content.selection.isValid) {
+        val before = content.textBeforeSelection
+        val exactLen = when {
+            before.endsWith(targetToReplace) -> targetToReplace.length
+            before.trimEnd().endsWith(targetToReplace.trim()) -> {
+                val trailingWs = before.length - before.trimEnd().length
+                targetToReplace.trim().length + trailingWs
+            }
+            else -> targetToReplace.length
+        }
+        val replaceStart = (content.selection.end - exactLen).coerceAtLeast(0)
+        editorInstance.setSelection(replaceStart, content.selection.end)
+        editorInstance.commitText(newText)
+    } else {
+        editorInstance.commitText(newText)
+    }
+    if (!isIncognito && targetToReplace.isNotBlank()) {
+        AiMemoryVault.recordLearnedCorrection(
+            context = context,
+            originalText = targetToReplace.trim(),
+            preferredText = newText,
+            taskLabel = taskLabel,
+            isSensitiveOrIncognito = false,
+        )
+    }
+}
 
 fun launchAiAssistantSettings(context: Context) {
     FlorisImeService.hideUi()
@@ -94,13 +193,9 @@ fun launchAiAssistantSettings(context: Context) {
 /**
  * Full Bottom AI Assistant Arena (`ImeUiMode.AI_ASSISTANT`).
  *
- * Designed with large, high-contrast user-friendly fonts (14sp–17sp) and big 1-tap action
- * buttons for:
- *  - Fix Grammar & Spelling (Grammarly-grade English + Roman Urdu)
- *  - Translate in Urdu (اردو) (converts both English and Roman Urdu into Urdu script)
- *  - Translate in English (converts Roman Urdu and Urdu into fluent English)
- *  - English → Roman Urdu
- *  - Smart WhatsApp Reply & Professional Polish
+ * Designed with large, high-contrast user-friendly fonts (14sp–17sp), intelligent long-text
+ * support (up to 2,500 chars), explicit Google Gemini / ChatGPT attribution, and Light-Green
+ * diff highlighting so the user immediately sees every word that was fixed.
  */
 @Composable
 fun AiAssistantInputLayout(
@@ -116,11 +211,10 @@ fun AiAssistantInputLayout(
     val vaultState by AiMemoryVault.state.collectAsState()
     val activeContent by editorInstance.activeContentFlow.collectAsState()
     val primaryClip by clipboardManager.primaryClipFlow.collectAsState()
+    val sharedLastFix by LastAiFixSession.latestFix.collectAsState()
 
     val sourceEditorText = remember(activeContent) {
-        activeContent.selectedText.ifBlank {
-            activeContent.textBeforeSelection.takeLast(600)
-        }
+        extractFullEditorText(activeContent)
     }
     val clipboardText = primaryClip?.text?.toString().orEmpty().trim()
 
@@ -134,33 +228,12 @@ fun AiAssistantInputLayout(
         AiMemoryVault.initialize(context)
     }
 
-    fun replaceTextInActiveEditor(targetToReplace: String, newText: String, taskLabel: String) {
-        val content = editorInstance.activeContent
-        if (content.selectedText.isNotEmpty()) {
-            editorInstance.commitText(newText)
-        } else if (targetToReplace.isNotEmpty() && content.selection.isValid) {
-            val replaceStart = (content.selection.end - targetToReplace.length).coerceAtLeast(0)
-            editorInstance.setSelection(replaceStart, content.selection.end)
-            editorInstance.commitText(newText)
-        } else {
-            editorInstance.commitText(newText)
-        }
-        if (!keyboardManager.activeState.isIncognitoMode && targetToReplace.isNotBlank()) {
-            AiMemoryVault.recordLearnedCorrection(
-                context = context,
-                originalText = targetToReplace,
-                preferredText = newText,
-                taskLabel = taskLabel,
-                isSensitiveOrIncognito = false,
-            )
-        }
-    }
-
     fun runTaskAndApply(task: AiWritingTask, overrideInput: String? = null) {
         if (isRunning) return
-        val currentEditorSnapshot = sourceEditorText.trim()
-        val inputForTask = (overrideInput ?: currentEditorSnapshot).ifBlank {
-            clipboardText.take(400)
+        val rawEditorSnapshot = sourceEditorText
+        val trimmedEditorSnapshot = rawEditorSnapshot.trim()
+        val inputForTask = (overrideInput ?: trimmedEditorSnapshot).ifBlank {
+            clipboardText.take(MAX_AI_EDITOR_CHARS)
         }.trim()
 
         if (inputForTask.isBlank()) {
@@ -185,13 +258,27 @@ fun AiAssistantInputLayout(
             isRunning = false
             val out = res.outputText.trim()
             if (out.isNotEmpty()) {
-                originalTextBeforeApply = currentEditorSnapshot.ifBlank { inputForTask }
-                replaceTextInActiveEditor(
-                    targetToReplace = currentEditorSnapshot,
+                val origForDiff = trimmedEditorSnapshot.ifBlank { inputForTask }
+                originalTextBeforeApply = origForDiff
+                replaceTextSmartInEditor(
+                    context = context,
+                    editorInstance = editorInstance,
+                    isIncognito = keyboardManager.activeState.isIncognitoMode,
+                    targetToReplace = rawEditorSnapshot,
                     newText = out,
                     taskLabel = task.chipLabel,
                 )
-                statusMessage = "✓ Applied to message box (${res.providerUsed})"
+                val snap = LastAiFixSession.record(
+                    originalText = origForDiff,
+                    fixedText = out,
+                    providerUsed = res.providerUsed,
+                    taskLabel = task.chipLabel,
+                )
+                statusMessage = if (snap.changedWordCount > 0) {
+                    "✨ Fixed by ${res.providerUsed} • ${snap.changedWordCount} word(s) highlighted"
+                } else {
+                    "✓ Verified by ${res.providerUsed}"
+                }
             }
         }
     }
@@ -296,7 +383,7 @@ fun AiAssistantInputLayout(
             }
         }
 
-        // 2. Main 2x2 Grid of Large, Easy-to-Read Action Buttons (14sp Bold)
+        // 2. Main 2x2 Grid of Large, Easy-to-Read Action Buttons (zero clipping at any font scale)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -305,20 +392,22 @@ fun AiAssistantInputLayout(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(46.dp)
+                    .defaultMinSize(minHeight = 46.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(btnBlue)
                     .clickable { runTaskAndApply(AiWritingTask.FIX_GRAMMAR_SPELLING) }
-                    .padding(horizontal = 8.dp),
+                    .padding(horizontal = 8.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 val label1 = "✨ Fix Grammar"
                 Text(
                     text = label1,
                     color = textWhite,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
 
@@ -326,20 +415,22 @@ fun AiAssistantInputLayout(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(46.dp)
+                    .defaultMinSize(minHeight = 46.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(btnEmerald)
                     .clickable { runTaskAndApply(AiWritingTask.TO_URDU_SCRIPT) }
-                    .padding(horizontal = 8.dp),
+                    .padding(horizontal = 8.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                val label2 = "🇵🇰 Translate in Urdu"
+                val label2 = "🇵🇰 Translate Urdu"
                 Text(
                     text = label2,
                     color = textWhite,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -352,20 +443,22 @@ fun AiAssistantInputLayout(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(46.dp)
+                    .defaultMinSize(minHeight = 46.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(btnIndigo)
                     .clickable { runTaskAndApply(AiWritingTask.ROMAN_URDU_TO_ENGLISH) }
-                    .padding(horizontal = 8.dp),
+                    .padding(horizontal = 8.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                val label3 = "🇬🇧 Translate in English"
+                val label3 = "🇬🇧 To English"
                 Text(
                     text = label3,
                     color = textWhite,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
 
@@ -373,20 +466,22 @@ fun AiAssistantInputLayout(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(46.dp)
+                    .defaultMinSize(minHeight = 46.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(btnTeal)
                     .clickable { runTaskAndApply(AiWritingTask.ENGLISH_TO_ROMAN_URDU) }
-                    .padding(horizontal = 8.dp),
+                    .padding(horizontal = 8.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                val label4 = "🇵🇰 To Roman Urdu"
+                val label4 = "🇵🇰 Roman Urdu"
                 Text(
                     text = label4,
                     color = textWhite,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -399,45 +494,69 @@ fun AiAssistantInputLayout(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(38.dp)
+                    .defaultMinSize(minHeight = 40.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(Color(0xFFDC2626))
                     .clickable {
                         FlorisImeService.switchToVoiceInputMethod(showFailureToast = true)
-                    },
+                    }
+                    .padding(horizontal = 6.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 val voiceLabel = "🎤 Voice AI"
-                Text(voiceLabel, color = textWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    voiceLabel,
+                    color = textWhite,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
 
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(38.dp)
+                    .defaultMinSize(minHeight = 40.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(btnSlate)
-                    .clickable { runTaskAndApply(AiWritingTask.WHATSAPP_REPLY) },
+                    .clickable { runTaskAndApply(AiWritingTask.WHATSAPP_REPLY) }
+                    .padding(horizontal = 6.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 val replyLabel = "💬 Smart Reply"
-                Text(replyLabel, color = textWhite, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    replyLabel,
+                    color = textWhite,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
 
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(38.dp)
+                    .defaultMinSize(minHeight = 40.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(btnSlate)
-                    .clickable { runTaskAndApply(AiWritingTask.TONE_PROFESSIONAL) },
+                    .clickable { runTaskAndApply(AiWritingTask.TONE_PROFESSIONAL) }
+                    .padding(horizontal = 6.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 val proLabel = "✨ Professional"
-                Text(proLabel, color = textWhite, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    proLabel,
+                    color = textWhite,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
 
-            val undoTarget = originalTextBeforeApply
+            val undoTarget = originalTextBeforeApply ?: sharedLastFix?.originalText
             if (!undoTarget.isNullOrBlank()) {
                 Box(
                     modifier = Modifier
@@ -446,13 +565,17 @@ fun AiAssistantInputLayout(
                         .background(accentAmber.copy(alpha = 0.25f))
                         .border(1.dp, accentAmber, RoundedCornerShape(10.dp))
                         .clickable {
-                            replaceTextInActiveEditor(
-                                targetToReplace = sourceEditorText.trim(),
+                            replaceTextSmartInEditor(
+                                context = context,
+                                editorInstance = editorInstance,
+                                isIncognito = keyboardManager.activeState.isIncognitoMode,
+                                targetToReplace = sourceEditorText,
                                 newText = undoTarget,
                                 taskLabel = "Undo",
                             )
                             originalTextBeforeApply = null
-                            statusMessage = "↩ Restored original text"
+                            LastAiFixSession.clear()
+                            statusMessage = "↩ Reverted to original text"
                         }
                         .padding(horizontal = 12.dp),
                     contentAlignment = Alignment.Center,
@@ -463,7 +586,7 @@ fun AiAssistantInputLayout(
             }
         }
 
-        // 4. Large Readable Text Preview & Result Box (16sp font)
+        // 4. Large Readable Text Preview & Light-Green Diff Result Box
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -472,7 +595,7 @@ fun AiAssistantInputLayout(
                 .border(1.dp, Color(0xFF334155), RoundedCornerShape(12.dp))
                 .padding(12.dp),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (isRunning) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -492,60 +615,107 @@ fun AiAssistantInputLayout(
                         )
                     }
                 } else {
-                    val displayText = lastResult?.outputText?.takeIf { it.isNotBlank() }
-                        ?: sourceEditorText.trim().takeIf { it.isNotBlank() }
-                        ?: clipboardText.takeIf { it.isNotBlank() }
+                    val activeSnapshot = sharedLastFix
+                    val activeFixedText = lastResult?.outputText?.takeIf { it.isNotBlank() }
+                        ?: activeSnapshot?.fixedText?.takeIf { it.isNotBlank() }
+                    val activeOriginalText = originalTextBeforeApply
+                        ?: activeSnapshot?.originalText
+                    val activeProvider = lastResult?.providerUsed
+                        ?: activeSnapshot?.providerUsed
 
-                    if (!statusMessage.isNullOrBlank()) {
+                    if (!activeFixedText.isNullOrBlank() && !activeOriginalText.isNullOrBlank()) {
+                        val diffResult = remember(activeOriginalText, activeFixedText) {
+                            AiDiffHighlighter.buildHighlightedDiff(activeOriginalText, activeFixedText)
+                        }
+                        val headerBadge = if (diffResult.changedWordCount > 0) {
+                            "✨ Fixed by ${activeProvider ?: "8002Keys AI"} • ${diffResult.changedWordCount} change(s) in green"
+                        } else {
+                            "✓ Verified by ${activeProvider ?: "8002Keys AI"}"
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF064E3B))
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                        ) {
+                            Text(
+                                text = headerBadge,
+                                color = Color(0xFF86EFAC),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                         Text(
-                            text = statusMessage!!,
-                            color = accentGreen,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-
-                    if (!displayText.isNullOrBlank()) {
-                        Text(
-                            text = displayText,
+                            text = diffResult.annotatedText,
                             color = textWhite,
-                            fontSize = 16.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Medium,
-                            lineHeight = 22.sp,
+                            lineHeight = 23.sp,
                         )
                     } else {
-                        val emptyGuide = "Tap any phrase below to test or insert, or tap 'Keyboard (ABC)' to type your message:"
-                        Text(
-                            text = emptyGuide,
-                            color = textMuted,
-                            fontSize = 14.sp,
-                        )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            listOf(
-                                "Ana hay milna b hay",
-                                "I am coming to Lahore tomorrow",
-                                "Assalamu Alaikum, kya haal hai?",
-                            ).forEach { sample ->
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(btnSlate)
-                                        .clickable {
-                                            editorInstance.commitText(sample)
-                                        }
-                                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                                ) {
-                                    Text(
-                                        text = "+ \"$sample\"",
-                                        color = textWhite,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium,
-                                    )
+                        val displayText = sourceEditorText.trim().takeIf { it.isNotBlank() }
+                            ?: clipboardText.takeIf { it.isNotBlank() }
+
+                        if (!statusMessage.isNullOrBlank()) {
+                            Text(
+                                text = statusMessage!!,
+                                color = accentGreen,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        } else if (!displayText.isNullOrBlank() && displayText.length > 180) {
+                            Text(
+                                text = "📄 Long text ready (${displayText.length} chars) — tap Fix Grammar or Translate",
+                                color = Color(0xFF93C5FD),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+
+                        if (!displayText.isNullOrBlank()) {
+                            Text(
+                                text = displayText,
+                                color = textWhite,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                                lineHeight = 22.sp,
+                            )
+                        } else {
+                            val emptyGuide = "Tap any phrase below to test or insert, or tap 'Keyboard (ABC)' to type your message:"
+                            Text(
+                                text = emptyGuide,
+                                color = textMuted,
+                                fontSize = 14.sp,
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                listOf(
+                                    "Ana hay milna b hay",
+                                    "I am coming to Lahore tomorrow",
+                                    "Assalamu Alaikum, kya haal hai?",
+                                ).forEach { sample ->
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(btnSlate)
+                                            .clickable {
+                                                editorInstance.commitText(sample)
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                    ) {
+                                        Text(
+                                            text = "+ \"$sample\"",
+                                            color = textWhite,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -560,8 +730,8 @@ fun AiAssistantInputLayout(
  * Large-Font, Easy-to-Read On-Keyboard AI Bar (`LiveAiSmartStrip`).
  *
  * Appears right above the typing keyboard (`ABC`) with 13sp–14sp bold buttons so the user
- * can fix grammar, translate in Urdu (اردو), translate in English, or open the SwiftKey Grid
- * with 1 tap while typing in WhatsApp or any app.
+ * can fix grammar (short or long multi-paragraph text up to 2,500 chars), translate in Urdu (اردو),
+ * translate in English, use Gemini/ChatGPT Voice AI, or inspect Light-Green highlighted diffs.
  */
 @Composable
 fun LiveAiSmartStrip(
@@ -576,6 +746,7 @@ fun LiveAiSmartStrip(
     val vaultState by AiMemoryVault.state.collectAsState()
     val activeContent by editorInstance.activeContentFlow.collectAsState()
     val latestUpdate by AppUpdateManager.latestUpdateFlow.collectAsState()
+    val sharedLastFix by LastAiFixSession.latestFix.collectAsState()
 
     LaunchedEffect(Unit) {
         AiMemoryVault.initialize(context)
@@ -593,6 +764,10 @@ fun LiveAiSmartStrip(
                 .substringAfterLast('\n')
                 .takeLast(280)
         }
+    }
+
+    val fullEditorText = remember(activeContent) {
+        extractFullEditorText(activeContent)
     }
 
     var liveSuggestion by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -619,32 +794,11 @@ fun LiveAiSmartStrip(
         }
     }
 
-    fun applyTextInEditor(targetToReplace: String, newText: String, taskLabel: String) {
-        val content = editorInstance.activeContent
-        if (content.selectedText.isNotEmpty()) {
-            editorInstance.commitText(newText)
-        } else if (targetToReplace.isNotEmpty() && content.selection.isValid) {
-            val replaceStart = (content.selection.end - targetToReplace.length).coerceAtLeast(0)
-            editorInstance.setSelection(replaceStart, content.selection.end)
-            editorInstance.commitText(newText)
-        } else {
-            editorInstance.commitText(newText)
-        }
-        if (!keyboardManager.activeState.isIncognitoMode && targetToReplace.isNotBlank()) {
-            AiMemoryVault.recordLearnedCorrection(
-                context = context,
-                originalText = targetToReplace,
-                preferredText = newText,
-                taskLabel = taskLabel,
-                isSensitiveOrIncognito = false,
-            )
-        }
-    }
-
     fun executeInPlaceTask(task: AiWritingTask) {
         if (isWorking) return
-        val target = activeSentence.trim()
-        if (target.isBlank()) {
+        val rawTarget = fullEditorText
+        val trimmedTarget = rawTarget.trim()
+        if (trimmedTarget.isBlank()) {
             keyboardManager.transitionToImeUiMode(ImeUiMode.AI_ASSISTANT)
             return
         }
@@ -654,7 +808,7 @@ fun LiveAiSmartStrip(
             val res = CloudAiClient.executeTask(
                 context = context,
                 task = task,
-                inputText = target,
+                inputText = trimmedTarget,
                 inputType = info.base.inputType,
                 imeOptions = info.base.imeOptions,
                 isIncognito = keyboardManager.activeState.isIncognitoMode,
@@ -662,7 +816,20 @@ fun LiveAiSmartStrip(
             isWorking = false
             val out = res.outputText.trim()
             if (out.isNotEmpty()) {
-                applyTextInEditor(target, out, task.chipLabel)
+                replaceTextSmartInEditor(
+                    context = context,
+                    editorInstance = editorInstance,
+                    isIncognito = keyboardManager.activeState.isIncognitoMode,
+                    targetToReplace = rawTarget,
+                    newText = out,
+                    taskLabel = task.chipLabel,
+                )
+                LastAiFixSession.record(
+                    originalText = trimmedTarget,
+                    fixedText = out,
+                    providerUsed = res.providerUsed,
+                    taskLabel = task.chipLabel,
+                )
                 liveSuggestion = null
             }
         }
@@ -725,6 +892,33 @@ fun LiveAiSmartStrip(
             )
         }
 
+        // 1c. Light-Green Model Attribution & Diff Pill (tap to view highlighted changes + Undo)
+        val latestFix = sharedLastFix
+        if (latestFix != null) {
+            val diffBadge = if (latestFix.changedWordCount > 0) {
+                "✓ ${latestFix.changedWordCount} fixed (${latestFix.shortProviderBadge()}) • Diff"
+            } else {
+                "✓ Verified (${latestFix.shortProviderBadge()})"
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF86EFAC))
+                    .clickable {
+                        keyboardManager.transitionToImeUiMode(ImeUiMode.AI_ASSISTANT)
+                    }
+                    .padding(horizontal = 11.dp, vertical = 6.dp),
+            ) {
+                Text(
+                    text = diffBadge,
+                    color = Color(0xFF052E16),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                )
+            }
+        }
+
         // 2. Auto-Update Ready Pill (if a newer GitHub build exists)
         val updateInfo = latestUpdate
         if (updateInfo != null && updateInfo.isUpdateAvailable) {
@@ -757,7 +951,20 @@ fun LiveAiSmartStrip(
                     .clip(RoundedCornerShape(10.dp))
                     .background(accentTeal)
                     .clickable {
-                        applyTextInEditor(orig, fixed, "Live Grammar Fix")
+                        replaceTextSmartInEditor(
+                            context = context,
+                            editorInstance = editorInstance,
+                            isIncognito = keyboardManager.activeState.isIncognitoMode,
+                            targetToReplace = orig,
+                            newText = fixed,
+                            taskLabel = "Live Grammar Fix",
+                        )
+                        LastAiFixSession.record(
+                            originalText = orig,
+                            fixedText = fixed,
+                            providerUsed = "8002Keys Instant Grammar",
+                            taskLabel = "Live Fix",
+                        )
                         liveSuggestion = null
                     }
                     .padding(horizontal = 12.dp, vertical = 6.dp),
