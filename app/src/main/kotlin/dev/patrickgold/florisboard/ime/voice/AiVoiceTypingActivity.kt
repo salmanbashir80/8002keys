@@ -34,8 +34,10 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -68,6 +70,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.patrickgold.florisboard.FlorisImeService
@@ -251,18 +254,26 @@ class AiVoiceTypingActivity : ComponentActivity() {
             }
         }
 
-        fun openGoogleSpeechInstaller() {
-            val market = Intent(
-                Intent.ACTION_VIEW,
-                android.net.Uri.parse("market://details?id=com.google.android.tts"),
-            ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-            val web = Intent(
-                Intent.ACTION_VIEW,
-                android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.tts"),
-            ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-            if (runCatching { startActivity(market) }.isFailure) {
-                runCatching { startActivity(web) }
+        fun openUrlInChrome(url: String) {
+            val uri = android.net.Uri.parse(url)
+            val chromeIntent = Intent(Intent.ACTION_VIEW, uri).apply {
+                setPackage("com.android.chrome")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
+            val genericIntent = Intent(Intent.ACTION_VIEW, uri).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            if (runCatching { startActivity(chromeIntent) }.isFailure) {
+                runCatching { startActivity(genericIntent) }
+            }
+        }
+
+        fun openGoogleSpeechInstaller() {
+            openUrlInChrome("https://play.google.com/store/apps/details?id=com.google.android.tts")
+        }
+
+        fun openFutoVoiceDownloadInChrome() {
+            openUrlInChrome("https://voiceinput.futo.org/")
         }
 
         fun startNativeSpeechRecognizer() {
@@ -470,47 +481,76 @@ class AiVoiceTypingActivity : ComponentActivity() {
                         )
                     }
 
+                    val compactBtnPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp)
+
                     if (speechUnavailable) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Button(
+                                    onClick = { openGoogleSpeechInstaller() },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .defaultMinSize(minHeight = 46.dp),
+                                    contentPadding = compactBtnPadding,
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
+                                ) {
+                                    val googleSpeechLbl = "🌐 Google Speech"
+                                    Text(
+                                        text = googleSpeechLbl,
+                                        color = textWhite,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                Button(
+                                    onClick = { openFutoVoiceDownloadInChrome() },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .defaultMinSize(minHeight = 46.dp),
+                                    contentPadding = compactBtnPadding,
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
+                                ) {
+                                    val futoLbl = "🌐 Offline Voice"
+                                    Text(
+                                        text = futoLbl,
+                                        color = textWhite,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
                             Button(
                                 onClick = { openVoiceSettings() },
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .height(46.dp),
+                                    .fillMaxWidth()
+                                    .defaultMinSize(minHeight = 44.dp),
+                                contentPadding = compactBtnPadding,
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = activeBlue),
                             ) {
-                                val openSettingsLbl = "⚙️ Open Voice Settings"
+                                val openSettingsLbl = "⚙️ Open Phone Voice Settings"
                                 Text(
                                     text = openSettingsLbl,
                                     color = textWhite,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
-                                )
-                            }
-                            Button(
-                                onClick = { openGoogleSpeechInstaller() },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(46.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
-                            ) {
-                                val installSpeechLbl = "📥 Enable Google Speech"
-                                Text(
-                                    text = installSpeechLbl,
-                                    color = textWhite,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         }
                     }
 
-                    // Primary Speak Now Button
+                    // Primary Speak Now Button Row (zero clipping!)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -520,42 +560,47 @@ class AiVoiceTypingActivity : ComponentActivity() {
                             enabled = !isProcessingAi,
                             modifier = Modifier
                                 .weight(1f)
-                                .height(50.dp),
+                                .defaultMinSize(minHeight = 48.dp),
+                            contentPadding = compactBtnPadding,
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = activeGreen),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Mic,
                                 contentDescription = null,
-                                modifier = Modifier.size(22.dp),
+                                modifier = Modifier.size(18.dp),
                             )
-                            Spacer(Modifier.width(8.dp))
-                            val speakNowLabel = "🎤 Speak Now"
+                            Spacer(Modifier.width(6.dp))
+                            val speakNowLabel = "Speak Now"
                             Text(
                                 text = speakNowLabel,
-                                fontSize = 15.sp,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.ExtraBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
 
                         OutlinedButton(
                             onClick = { openVoiceSettings() },
                             enabled = !isProcessingAi,
-                            modifier = Modifier.height(50.dp),
+                            modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                             shape = RoundedCornerShape(12.dp),
                         ) {
                             val settingsShort = "⚙️"
-                            Text(settingsShort, color = textWhite, fontSize = 16.sp)
+                            Text(settingsShort, color = textWhite, fontSize = 15.sp, maxLines = 1)
                         }
 
                         OutlinedButton(
                             onClick = onClose,
                             enabled = !isProcessingAi,
-                            modifier = Modifier.height(50.dp),
+                            modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
                             shape = RoundedCornerShape(12.dp),
                         ) {
                             val cancelLabel = "Close"
-                            Text(cancelLabel, color = textWhite, fontSize = 14.sp)
+                            Text(cancelLabel, color = textWhite, fontSize = 14.sp, maxLines = 1)
                         }
                     }
                 }
