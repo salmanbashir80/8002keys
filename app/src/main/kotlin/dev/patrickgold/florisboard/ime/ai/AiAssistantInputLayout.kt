@@ -420,7 +420,7 @@ fun AiAssistantInputLayout(
                     // Clipboard has an incoming message -> offer instant smart reply
                     LocalGrammarAndRewriteEngine.executeLocalFallback(
                         task = AiWritingTask.WHATSAPP_REPLY,
-                        input = clipboardText,
+                        inputText = clipboardText,
                     )
                 } else {
                     null
@@ -825,13 +825,14 @@ fun LiveAiSmartStrip(
     var liveSuggestion by remember { mutableStateOf<Pair<String, String>?>(null) }
     var isWorking by remember { mutableStateOf(false) }
 
-    // Real-time automatic grammar & spell check as user types
+    // Real-time automatic grammar & spell check with 650ms debounce (zero flicker while typing!)
     LaunchedEffect(activeSentence) {
         val clean = activeSentence.trim()
-        if (clean.length < 3) {
-            liveSuggestion = null
+        if (clean.length < 4) {
+            if (liveSuggestion != null) liveSuggestion = null
             return@LaunchedEffect
         }
+        delay(650)
         val info = editorInstance.activeInfo
         if (dev.patrickgold.florisboard.ime.smartcompose.SensitiveFieldGuard.isSensitive(info.base.inputType, info.base.imeOptions)) {
             liveSuggestion = null
@@ -904,6 +905,8 @@ fun LiveAiSmartStrip(
         horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // ---- FIXED STATIONARY CORE BUTTONS (never shift or flicker while typing!) ----
+
         // 1. Compact SwiftKey 4-Column Grid Menu Button
         Box(
             modifier = Modifier
@@ -925,7 +928,7 @@ fun LiveAiSmartStrip(
             )
         }
 
-        // 1b. Compact Built-in Gemini & ChatGPT AI Voice Typing Button (Roman Urdu / English / Urdu)
+        // 2. Compact Built-in Gemini & ChatGPT AI Voice Typing Button
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
@@ -944,7 +947,130 @@ fun LiveAiSmartStrip(
             )
         }
 
-        // 1c. Compact Light-Green Diff Pill (tap to view highlighted changes + Undo)
+        // 3. Compact 1-Tap Fix Grammar Button
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(if (isWorking) accentAmber else accentBlue)
+                .clickable { executeInPlaceTask(AiWritingTask.FIX_GRAMMAR_SPELLING) }
+                .padding(horizontal = 9.dp, vertical = 5.dp),
+        ) {
+            val fixBtnLabel = if (isWorking) "⏳" else "✨ Fix"
+            Text(
+                text = fixBtnLabel,
+                color = textWhite,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+
+        // 4. Compact 1-Tap Urdu Button
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(accentTeal)
+                .clickable { executeInPlaceTask(AiWritingTask.TO_URDU_SCRIPT) }
+                .padding(horizontal = 9.dp, vertical = 5.dp),
+        ) {
+            val urduBtnLabel = "🇵🇰 Urdu"
+            Text(
+                text = urduBtnLabel,
+                color = textWhite,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+
+        // 5. Compact 1-Tap English Button
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(accentIndigo)
+                .clickable { executeInPlaceTask(AiWritingTask.ROMAN_URDU_TO_ENGLISH) }
+                .padding(horizontal = 9.dp, vertical = 5.dp),
+        ) {
+            val engBtnLabel = "🇬🇧 Eng"
+            Text(
+                text = engBtnLabel,
+                color = textWhite,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+
+        // 6. Compact Open Full AI Panel Button
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(pillBg)
+                .border(1.dp, accentTeal, RoundedCornerShape(8.dp))
+                .clickable { keyboardManager.transitionToImeUiMode(ImeUiMode.AI_ASSISTANT) }
+                .padding(horizontal = 9.dp, vertical = 5.dp),
+        ) {
+            val panelBtnLabel = "✨ AI"
+            Text(
+                text = panelBtnLabel,
+                color = textWhite,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+
+        // 7. Compact Roman Urdu Button
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(pillBg)
+                .border(1.dp, Color(0xFF404040), RoundedCornerShape(8.dp))
+                .clickable { executeInPlaceTask(AiWritingTask.ENGLISH_TO_ROMAN_URDU) }
+                .padding(horizontal = 9.dp, vertical = 5.dp),
+        ) {
+            val romanBtnLabel = "🇵🇰 Roman"
+            Text(
+                text = romanBtnLabel,
+                color = textWhite,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+
+        // 8. Compact Resize Button
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(pillBg)
+                .clickable { windowController?.editor?.toggleEnabled() }
+                .padding(horizontal = 8.dp, vertical = 5.dp),
+        ) {
+            val resizeBtnLabel = "⤢"
+            Text(
+                text = resizeBtnLabel,
+                color = textWhite,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+
+        // 9. Compact Account Status Pill
+        val loginLabel = if (vaultState.hasAnyCloudProvider) "👤 ✓" else "👤 Login"
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(if (vaultState.hasAnyCloudProvider) pillBg else accentAmber)
+                .clickable { launchAiAssistantSettings(context) }
+                .padding(horizontal = 8.dp, vertical = 5.dp),
+        ) {
+            Text(
+                text = loginLabel,
+                color = if (vaultState.hasAnyCloudProvider) Color(0xFF34D399) else Color.Black,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+
+        // ---- DYNAMIC CONTEXTUAL BADGES AT THE END (never shift the core buttons above!) ----
+
+        // 10. Compact Light-Green Diff Pill (tap to view highlighted changes + Undo)
         val latestFix = sharedLastFix
         if (latestFix != null) {
             val diffBadge = if (latestFix.changedWordCount > 0) {
@@ -971,7 +1097,7 @@ fun LiveAiSmartStrip(
             }
         }
 
-        // 2. Compact Auto-Update Badge (instead of a wide banner)
+        // 11. Compact Auto-Update Badge
         val updateInfo = latestUpdate
         if (updateInfo != null && updateInfo.isUpdateAvailable) {
             Box(
@@ -994,7 +1120,7 @@ fun LiveAiSmartStrip(
             }
         }
 
-        // 3. Compact Live Auto-Detected Grammar / Spelling Fix Pill
+        // 12. Debounced Live Auto-Detected Grammar Fix Pill
         val suggestion = liveSuggestion
         if (suggestion != null) {
             val (orig, fixed) = suggestion
@@ -1030,127 +1156,6 @@ fun LiveAiSmartStrip(
                     maxLines = 1,
                 )
             }
-        }
-
-        // 4. Compact 1-Tap Fix Grammar Button
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(if (isWorking) accentAmber else accentBlue)
-                .clickable { executeInPlaceTask(AiWritingTask.FIX_GRAMMAR_SPELLING) }
-                .padding(horizontal = 9.dp, vertical = 5.dp),
-        ) {
-            val fixBtnLabel = if (isWorking) "⏳" else "✨ Fix"
-            Text(
-                text = fixBtnLabel,
-                color = textWhite,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-
-        // 5. Compact 1-Tap Urdu Button
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(accentTeal)
-                .clickable { executeInPlaceTask(AiWritingTask.TO_URDU_SCRIPT) }
-                .padding(horizontal = 9.dp, vertical = 5.dp),
-        ) {
-            val urduBtnLabel = "🇵🇰 Urdu"
-            Text(
-                text = urduBtnLabel,
-                color = textWhite,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-
-        // 6. Compact 1-Tap English Button
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(accentIndigo)
-                .clickable { executeInPlaceTask(AiWritingTask.ROMAN_URDU_TO_ENGLISH) }
-                .padding(horizontal = 9.dp, vertical = 5.dp),
-        ) {
-            val engBtnLabel = "🇬🇧 Eng"
-            Text(
-                text = engBtnLabel,
-                color = textWhite,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-
-        // 7. Compact Open Full AI Panel Button
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(pillBg)
-                .border(1.dp, accentTeal, RoundedCornerShape(8.dp))
-                .clickable { keyboardManager.transitionToImeUiMode(ImeUiMode.AI_ASSISTANT) }
-                .padding(horizontal = 9.dp, vertical = 5.dp),
-        ) {
-            val panelBtnLabel = "✨ AI"
-            Text(
-                text = panelBtnLabel,
-                color = textWhite,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-
-        // 8. Compact Roman Urdu Button
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(pillBg)
-                .border(1.dp, Color(0xFF404040), RoundedCornerShape(8.dp))
-                .clickable { executeInPlaceTask(AiWritingTask.ENGLISH_TO_ROMAN_URDU) }
-                .padding(horizontal = 9.dp, vertical = 5.dp),
-        ) {
-            val romanBtnLabel = "🇵🇰 Roman"
-            Text(
-                text = romanBtnLabel,
-                color = textWhite,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-
-        // 9. Compact Resize Button
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(pillBg)
-                .clickable { windowController?.editor?.toggleEnabled() }
-                .padding(horizontal = 8.dp, vertical = 5.dp),
-        ) {
-            val resizeBtnLabel = "⤢"
-            Text(
-                text = resizeBtnLabel,
-                color = textWhite,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-
-        // 10. Compact Account Status Pill
-        val loginLabel = if (vaultState.hasAnyCloudProvider) "👤 ✓" else "👤 Login"
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(if (vaultState.hasAnyCloudProvider) pillBg else accentAmber)
-                .clickable { launchAiAssistantSettings(context) }
-                .padding(horizontal = 8.dp, vertical = 5.dp),
-        ) {
-            Text(
-                text = loginLabel,
-                color = if (vaultState.hasAnyCloudProvider) Color(0xFF34D399) else Color.Black,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-            )
         }
     }
 }

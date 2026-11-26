@@ -466,7 +466,9 @@ internal object ImmediateAutocorrect {
         val letters = typedWord.filter { it.isLetter() }
         if (letters.length > 1 && letters.all { it.isUpperCase() }) return null
         val normalized = typedWord.lowercase()
-        val canonical = BilingualFastTypingCorrections[normalized] ?: return null
+        val canonical = BilingualFastTypingCorrections[normalized]
+            ?: findFuzzyRomanUrduOrPersonalCorrection(normalized)
+            ?: return null
         val finalText = if (canonical.any { it.isUpperCase() }) {
             canonical
         } else {
@@ -480,6 +482,135 @@ internal object ImmediateAutocorrect {
             isEligibleForUserRemoval = false,
         )
     }
+
+    /**
+     * Real-time QWERTY-aware fuzzy matcher for Roman Urdu + user's Personal Dictionary words
+     * (imported from SwiftKey/Gboard or learned via AI Memory Vault).
+     *
+     * Fixes 1-key slips like "kaeo" -> "karo", "ursu" -> "urdu", "toman" -> "roman",
+     * "correcr" -> "correct" directly on Spacebar while never overriding real English words.
+     */
+    private fun findFuzzyRomanUrduOrPersonalCorrection(normalized: String): String? {
+        if (normalized.length < 4) return null
+        if (normalized in RomanUrduCoreVocabSet || normalized in ProtectedEnglishWords) return null
+
+        val personalWords = runCatching {
+            dev.patrickgold.florisboard.ime.ai.AiMemoryVault.state.value.customWords
+        }.getOrDefault(emptyList())
+
+        var bestWord: String? = null
+        var bestDist = Int.MAX_VALUE
+        val maxAllowedDist = if (normalized.length >= 6) 2 else 1
+
+        fun evaluateCandidate(candidate: String) {
+            val candLower = candidate.lowercase()
+            if (candLower == normalized) return
+            if (kotlin.math.abs(candLower.length - normalized.length) > maxAllowedDist) return
+            // Require same first letter for short 4-5 char words unless first char is QWERTY-adjacent
+            if (normalized.length <= 5 && candLower[0] != normalized[0] && !areQwertyAdjacent(normalized[0], candLower[0])) {
+                return
+            }
+            val dist = damerauLevenshtein(normalized, candLower)
+            if (dist <= maxAllowedDist && dist < bestDist) {
+                bestDist = dist
+                bestWord = candidate
+            }
+        }
+
+        for (w in RomanUrduCoreVocab) {
+            evaluateCandidate(w)
+            if (bestDist == 1 && bestWord?.lowercase()?.first() == normalized.first()) break
+        }
+        if (bestDist > 1) {
+            for (w in personalWords) {
+                if (w.length >= 4 && w.all { it.isLetter() }) {
+                    evaluateCandidate(w)
+                }
+            }
+        }
+        return bestWord
+    }
+
+    private fun damerauLevenshtein(a: String, b: String): Int {
+        val m = a.length
+        val n = b.length
+        val dp = Array(m + 1) { IntArray(n + 1) }
+        for (i in 0..m) dp[i][0] = i
+        for (j in 0..n) dp[0][j] = j
+        for (i in 1..m) {
+            for (j in 1..n) {
+                val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+                var v = minOf(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost)
+                if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1]) {
+                    v = minOf(v, dp[i - 2][j - 2] + 1)
+                }
+                dp[i][j] = v
+            }
+        }
+        return dp[m][n]
+    }
+
+    private fun areQwertyAdjacent(c1: Char, c2: Char): Boolean {
+        val rows = arrayOf("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        var r1 = -1; var x1 = -1; var r2 = -1; var x2 = -1
+        for (r in rows.indices) {
+            val i1 = rows[r].indexOf(c1)
+            if (i1 >= 0) { r1 = r; x1 = i1 }
+            val i2 = rows[r].indexOf(c2)
+            if (i2 >= 0) { r2 = r; x2 = i2 }
+        }
+        if (r1 < 0 || r2 < 0) return false
+        return kotlin.math.abs(r1 - r2) <= 1 && kotlin.math.abs(x1 - x2) <= 1
+    }
+
+    private val RomanUrduCoreVocab: List<String> = listOf(
+        "karo", "karna", "karni", "karne", "karein", "karoon", "karwao", "karta", "karti", "karte",
+        "roman", "urdu", "mujhe", "aapko", "aapka", "aapki", "tumhein", "chahiye", "bohat", "bahut",
+        "theek", "accha", "shukriya", "meherbani", "behtareen", "zaroor", "bilkul", "jaldi", "samajh",
+        "masla", "batao", "batana", "dikhao", "likho", "likhna", "bolna", "milna", "aana", "jana",
+        "subah", "shaam", "raat", "waqt", "zindagi", "dost", "bhai", "yaar", "ghar", "kaam", "baat",
+        "pehle", "baad", "saath", "liye", "upar", "neeche", "yahan", "wahan", "kahan", "kaise",
+        "kyun", "lekin", "magar", "agar", "phir", "abhi", "sirf", "dobara", "taake", "jaise",
+        "aise", "isko", "usko", "unko", "nahi", "mein", "hain", "raha", "rahi", "rahe", "gaya",
+        "gayi", "gaye", "hoga", "hogi", "honge", "sakta", "sakti", "sakte", "lagta", "lagti",
+        "milta", "milti", "dekho", "suno", "chalo", "ruko", "wala", "wali", "wale", "idhar",
+        "udhar", "andar", "bahar", "aage", "peeche", "kuch", "apna", "apni", "apne", "mera",
+        "meri", "mere", "tera", "teri", "tere", "uska", "uski", "uske", "iska", "iski", "iske",
+        "humara", "hamara", "tumhara", "kitna", "kitni", "kitne", "itna", "itni", "itne", "zyada",
+        "thoda", "thori", "khush", "pareshan", "mushkil", "aasaan", "tayyar", "shuru", "khatam",
+        "intezar", "khayal", "salam", "allah", "khuda", "hafiz", "InshaAllah", "MashaAllah",
+        "Alhamdulillah", "JazakAllah", "Assalamu", "Alaikum",
+        // High-frequency English tech/chat words frequently mistyped alongside Roman Urdu
+        "correct", "correction", "keyboard", "typing", "flickering", "button", "translation",
+        "translate", "import", "dictionary", "memory", "google", "account", "settings", "update",
+        "message", "voice", "grammar", "assistant",
+    )
+
+    private val RomanUrduCoreVocabSet: Set<String> = RomanUrduCoreVocab.map { it.lowercase() }.toSet()
+
+    private val ProtectedEnglishWords: Set<String> = setOf(
+        "have", "this", "that", "with", "from", "they", "will", "what", "when", "make", "like",
+        "time", "just", "know", "take", "into", "year", "your", "good", "some", "them", "than",
+        "then", "look", "only", "come", "over", "also", "back", "work", "well", "even", "want",
+        "give", "most", "more", "here", "need", "home", "hand", "high", "keep", "last", "long",
+        "made", "much", "must", "name", "next", "open", "part", "play", "read", "real", "room",
+        "said", "same", "show", "side", "soon", "stop", "sure", "talk", "tell", "text", "turn",
+        "very", "wait", "walk", "week", "went", "were", "word", "love", "help", "send", "call",
+        "done", "fine", "free", "full", "game", "girl", "gone", "hard", "head", "hear", "hour",
+        "idea", "kind", "late", "left", "life", "line", "list", "live", "lost", "main", "mean",
+        "meet", "mind", "miss", "move", "near", "nice", "note", "once", "pack", "page", "paid",
+        "pain", "pair", "park", "pass", "past", "path", "plan", "plus", "post", "pull", "push",
+        "rain", "rest", "rich", "ride", "ring", "rise", "road", "rock", "role", "rule", "safe",
+        "sale", "save", "seat", "seem", "self", "sell", "sent", "shop", "shot", "shut", "sign",
+        "sing", "site", "size", "skin", "slip", "slow", "snap", "snow", "soft", "soil", "sold",
+        "song", "sort", "soul", "spot", "star", "stay", "step", "such", "suit", "swim", "tail",
+        "tall", "tape", "task", "team", "tear", "term", "test", "thin", "tied", "till", "tiny",
+        "told", "tone", "took", "tool", "tour", "town", "tree", "trip", "true", "tube", "type",
+        "unit", "upon", "used", "user", "vast", "view", "vote", "wage", "wake", "wall", "warm",
+        "warn", "wash", "wave", "weak", "wear", "west", "wide", "wife", "wild", "wind", "wine",
+        "wing", "wire", "wise", "wish", "wood", "wore", "wrap", "yard", "yeah", "zero", "zone",
+        "menu", "data", "auto", "fast", "chat", "copy", "paste", "undo", "redo", "mode", "dark",
+    )
 
     fun bilingualPhraseRepairCandidate(
         rawWord: String,

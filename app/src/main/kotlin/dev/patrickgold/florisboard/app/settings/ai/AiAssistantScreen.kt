@@ -825,6 +825,114 @@ fun AiAssistantScreen() = FlorisScreen {
                         }
                     }
 
+                    // Import Personal Dictionary from SwiftKey / Gboard / Other Keyboard
+                    var showKeyboardImportBox by remember { mutableStateOf(false) }
+                    var pastedImportWords by remember { mutableStateOf("") }
+                    val dictFilePicker = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.OpenDocument(),
+                    ) { uri ->
+                        if (uri != null) {
+                            val importedText = runCatching {
+                                context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                            }.getOrNull().orEmpty()
+                            if (importedText.isNotBlank()) {
+                                AiMemoryVault.learnWordsFromText(context, importedText)
+                                AiMemoryVault.saveToPersistentStorageNow(context)
+                                memoryStatus = "✓ Imported dictionary words into your 8002Keys Roman Urdu & English Vault!"
+                            } else {
+                                memoryStatus = "Could not read words from the selected file."
+                            }
+                        }
+                    }
+
+                    Button(
+                        onClick = { showKeyboardImportBox = !showKeyboardImportBox },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 46.dp),
+                        contentPadding = btnPadding,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = royalBlue),
+                    ) {
+                        val importBtnTitle = if (showKeyboardImportBox) {
+                            "▲ Hide SwiftKey / Gboard Import"
+                        } else {
+                            "📥 Import from SwiftKey / Gboard / Other Keyboard"
+                        }
+                        Text(
+                            text = importBtnTitle,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+
+                    if (showKeyboardImportBox) {
+                        val importHint = "Import your personal Roman Urdu, English, or Urdu words from a Gboard/SwiftKey export file (.txt / .csv) OR paste your chat/word list below:"
+                        Text(
+                            text = importHint,
+                            fontSize = 12.sp,
+                        )
+                        OutlinedButton(
+                            onClick = {
+                                dictFilePicker.launch(arrayOf("text/*", "application/json", "*/*"))
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .defaultMinSize(minHeight = 44.dp),
+                            contentPadding = btnPadding,
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            val filePickLabel = "📂 Select SwiftKey / Gboard File (.txt / .csv)"
+                            Text(
+                                text = filePickLabel,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        OutlinedTextField(
+                            value = pastedImportWords,
+                            onValueChange = { pastedImportWords = it },
+                            label = {
+                                val pasteHint = "Or paste Roman Urdu / English / Urdu words here"
+                                Text(pasteHint, fontSize = 12.sp)
+                            },
+                            textStyle = TextStyle(fontSize = 14.sp),
+                            minLines = 2,
+                            maxLines = 4,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Button(
+                            onClick = {
+                                val clean = pastedImportWords.trim()
+                                if (clean.isNotEmpty()) {
+                                    AiMemoryVault.learnWordsFromText(context, clean)
+                                    AiMemoryVault.saveToPersistentStorageNow(context)
+                                    pastedImportWords = ""
+                                    memoryStatus = "✓ Added your words to 8002Keys Auto-Correct & Google Account Vault!"
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .defaultMinSize(minHeight = 44.dp),
+                            contentPadding = btnPadding,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = emeraldGreen),
+                        ) {
+                            val addWordsBtn = "✓ Import Pasted Words Now"
+                            Text(
+                                text = addWordsBtn,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+
                     if (!memoryStatus.isNullOrBlank()) {
                         Text(
                             text = memoryStatus!!,

@@ -248,11 +248,11 @@ object AiMemoryVault {
     )
 
     fun learnWordsFromText(context: Context, text: String) {
-        val tokens = text.split(Regex("""[\s,.;:!?()\[\]"']+"""))
+        val tokens = text.split(Regex("""[\s,.;:!?()\[\]"'\t]+"""))
             .map { it.trim() }
             .filter { it.length in 3..28 && it.any { ch -> ch.isLetter() } }
             .distinct()
-            .take(20)
+            .take(250)
         if (tokens.isEmpty()) return
         updateState(context) { current ->
             val merged = (tokens + current.customWords)
