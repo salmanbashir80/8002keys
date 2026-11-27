@@ -873,7 +873,6 @@ fun LiveAiSmartStrip(
     val scope = rememberCoroutineScope()
 
     val vaultState by AiMemoryVault.state.collectAsState()
-    val activeContent by editorInstance.activeContentFlow.collectAsState()
     val latestUpdate by AppUpdateManager.latestUpdateFlow.collectAsState()
     val sharedLastFix by LastAiFixSession.latestFix.collectAsState()
 
@@ -887,46 +886,11 @@ fun LiveAiSmartStrip(
 
     if (!vaultState.aiGrammarSpellCheckEnabled) return
 
-    val activeSentence = remember(activeContent) {
-        activeContent.selectedText.ifBlank {
-            activeContent.textBeforeSelection
-                .substringAfterLast('\n')
-                .takeLast(280)
-        }
-    }
-
-    val fullEditorText = remember(activeContent) {
-        extractFullEditorText(activeContent)
-    }
-
-    var liveSuggestion by remember { mutableStateOf<Pair<String, String>?>(null) }
     var isWorking by remember { mutableStateOf(false) }
-
-    // Real-time automatic grammar & spell check with 650ms debounce (zero flicker while typing!)
-    LaunchedEffect(activeSentence) {
-        val clean = activeSentence.trim()
-        if (clean.length < 4) {
-            if (liveSuggestion != null) liveSuggestion = null
-            return@LaunchedEffect
-        }
-        delay(650)
-        val info = editorInstance.activeInfo
-        if (dev.patrickgold.florisboard.ime.smartcompose.SensitiveFieldGuard.isSensitive(info.base.inputType, info.base.imeOptions)) {
-            liveSuggestion = null
-            return@LaunchedEffect
-        }
-
-        val localFixed = LocalGrammarAndRewriteEngine.fixGrammarAndSpelling(clean)
-        if (localFixed.isNotBlank() && !localFixed.equals(clean, ignoreCase = false)) {
-            liveSuggestion = clean to localFixed
-        } else {
-            liveSuggestion = null
-        }
-    }
 
     fun executeInPlaceTask(task: AiWritingTask) {
         if (isWorking) return
-        val rawTarget = fullEditorText
+        val rawTarget = extractFullEditorText(editorInstance.activeContent)
         val trimmedTarget = rawTarget.trim()
         if (trimmedTarget.isBlank()) {
             keyboardManager.transitionToImeUiMode(ImeUiMode.AI_ASSISTANT)
@@ -960,7 +924,6 @@ fun LiveAiSmartStrip(
                     providerUsed = res.providerUsed,
                     taskLabel = task.chipLabel,
                 )
-                liveSuggestion = null
             }
         }
     }
@@ -982,7 +945,7 @@ fun LiveAiSmartStrip(
         horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // ---- FIXED STATIONARY CORE BUTTONS (never shift or flicker while typing!) ----
+        // ---- FIXED STATIONARY CORE BUTTONS (zero recomposition while typing!) ----
 
         // 1. Compact SwiftKey 4-Column Grid Menu Button
         Box(
@@ -1162,7 +1125,7 @@ fun LiveAiSmartStrip(
                                 context = context,
                                 editorInstance = editorInstance,
                                 isIncognito = keyboardManager.activeState.isIncognitoMode,
-                                targetToReplace = fullEditorText,
+                                targetToReplace = extractFullEditorText(editorInstance.activeContent),
                                 newText = step.originalText,
                                 taskLabel = "Undo",
                             )
@@ -1227,44 +1190,6 @@ fun LiveAiSmartStrip(
                     color = Color.Black,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.ExtraBold,
-                )
-            }
-        }
-
-        // 12. Debounced Live Auto-Detected Grammar Fix Pill
-        val suggestion = liveSuggestion
-        if (suggestion != null) {
-            val (orig, fixed) = suggestion
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(accentTeal)
-                    .clickable {
-                        replaceTextSmartInEditor(
-                            context = context,
-                            editorInstance = editorInstance,
-                            isIncognito = keyboardManager.activeState.isIncognitoMode,
-                            targetToReplace = orig,
-                            newText = fixed,
-                            taskLabel = "Live Grammar Fix",
-                        )
-                        LastAiFixSession.record(
-                            originalText = orig,
-                            fixedText = fixed,
-                            providerUsed = "8002Keys Instant Grammar",
-                            taskLabel = "Live Fix",
-                        )
-                        liveSuggestion = null
-                    }
-                    .padding(horizontal = 9.dp, vertical = 5.dp),
-            ) {
-                val fixChipText = "✨ ${fixed.take(26)} ✓"
-                Text(
-                    text = fixChipText,
-                    color = textWhite,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
                 )
             }
         }

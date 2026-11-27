@@ -118,6 +118,18 @@ internal object CandidateAutoCommitPolicy {
                 candidateSignals = candidateSignals,
                 autoCorrectConfidenceThreshold = autoCorrectConfidenceThreshold,
             )?.let { return it }
+
+            // Check high-confidence bilingual (Roman Urdu + English contractions/typos) BEFORE
+            // generic English dictionary selection so English never overwrites Roman Urdu!
+            firstAllowedCandidate(
+                currentWord = currentWord,
+                currentWordStart = currentWordStart,
+                rejectionPolicy = rejectionPolicy,
+                candidates = listOfNotNull(immediateAutoCommitCandidate),
+                autoCorrectCommitMode = autoCorrectCommitMode,
+                candidateSignals = candidateSignals,
+                autoCorrectConfidenceThreshold = autoCorrectConfidenceThreshold,
+            )?.let { return it }
         }
 
         val candidate = SwiftKeyCandidateRanker.selectSpacebarCandidate(
@@ -128,19 +140,7 @@ internal object CandidateAutoCommitPolicy {
             candidateSignals = candidateSignals,
             autoCorrectCommitMode = autoCorrectCommitMode,
             autoCorrectConfidenceThreshold = autoCorrectConfidenceThreshold,
-        ) ?: return if (autoCorrectEnabled) {
-            firstAllowedCandidate(
-                currentWord = currentWord,
-                currentWordStart = currentWordStart,
-                rejectionPolicy = rejectionPolicy,
-                candidates = listOfNotNull(immediateAutoCommitCandidate),
-                autoCorrectCommitMode = autoCorrectCommitMode,
-                candidateSignals = candidateSignals,
-                autoCorrectConfidenceThreshold = autoCorrectConfidenceThreshold,
-            )
-        } else {
-            null
-        }
+        ) ?: return null
 
         return candidate.takeIf {
             rejectionPolicy.allowsCandidate(currentWord, it, currentWordStart)
